@@ -9,3 +9,5 @@
 - [四仓库总体计划](docs/saas-platform-plan.md)（初始化快照；后续跨仓库决策以 saas-admin 为协调入口）
 
 源代码基线：[8cdc9ae](https://github.com/valeeraZ/portal-multiapps/tree/8cdc9ae56381dcbde8b8d3c965a75a918897896c)。
+
+- [当前平台约束与本仓库下一步](docs/PLATFORM-DECISIONS.md)

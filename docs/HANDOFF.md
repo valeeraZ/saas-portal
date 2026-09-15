@@ -23,3 +23,7 @@ SDK 已合并；用户已确认托管、开放注册、审核后外部应用同�
 ## 2026-09-15 Portal 身份接入
 
 已新增独立 Web/BFF，与真实 Auth/Keycloak 验证登录、租户创建和两个标签页切换、SMTP 邀请接受、越权拒绝以及会话退出。初始文档中“Portal 尚无实现”已被本更新替代，旧源仓库未改动。会话/租户方案见 ADR 0003，本地运行见 integration/README.md。本阶段不关闭 PORTAL-02 的 Admin、代理、SDK 与偏好抽取工作。
+
+## 2026-09-15 — Admin application directory
+
+Tenant pages now consume the real Admin catalog using server-only PORTAL_ADMIN_URL / PORTAL_ADMIN_KEY. The directory combines online Auth membership/application-role checks with Admin installation, entitlement and deployment facts. Empty and unavailable states are distinct; pagination supports empty role-filtered pages. Internal targets and service credentials never reach the browser. App cards intentionally have no launch link until the tenant-aware application proxy is implemented. See docs/ADMIN-CATALOG-VALIDATION.md for evidence.

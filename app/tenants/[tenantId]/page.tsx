@@ -1,3 +1,5 @@
+import { loadCatalog } from "../../../lib/catalog.ts";
+import Applications from "./catalog.tsx";
 import type { TenantContext } from "../../../lib/contracts.ts";
 import { auth, session, AuthError } from "../../../lib/http.ts";
 import { redirect } from "next/navigation";
@@ -19,6 +21,7 @@ export default async function Tenant({
       context = await auth<TenantContext>("/v1/tenant-context", s, "POST", {
         tenantId,
       });
+    const catalog = await loadCatalog(tenantId, s).catch(() => null);
     return (
       <>
         <a href="/">← 切换租户</a>
@@ -27,7 +30,11 @@ export default async function Tenant({
         <p>租户：{context.tenant.id}</p>
         <section>
           <h2>应用</h2>
-          <p>应用目录将在 Admin 开通与权益接入后显示。</p>
+          {catalog ? (
+            <Applications initial={catalog} />
+          ) : (
+            <p role="alert">应用目录暂时不可用，请稍后刷新重试。</p>
+          )}
         </section>
       </>
     );

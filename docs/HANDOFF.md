@@ -27,3 +27,7 @@ SDK 已合并；用户已确认托管、开放注册、审核后外部应用同�
 ## 2026-09-15 — Admin application directory
 
 Tenant pages now consume the real Admin catalog using server-only PORTAL_ADMIN_URL / PORTAL_ADMIN_KEY. The directory combines online Auth membership/application-role checks with Admin installation, entitlement and deployment facts. Empty and unavailable states are distinct; pagination supports empty role-filtered pages. Internal targets and service credentials never reach the browser. App cards intentionally have no launch link until the tenant-aware application proxy is implemented. See docs/ADMIN-CATALOG-VALIDATION.md for evidence.
+
+## 2026-09-16 — tenant application HTTP proxy
+
+Application cards now open `/tenants/{tenantId}/apps/{mount}/`. A Node route handler performs session validation and private Admin route authorization for each page/resource/API request; explicit target allowlist, filtered headers, tenant-preserving redirects and signed per-request app assertions protect the forwarding boundary. Real example backend validates the assertion and stores notes in a separate tenant-scoped database. See docs/TENANT-APP-PROXY.md and docs/PROXY-VALIDATION.md. HTTP and bounded SSE only; WebSockets and legacy Next application adapters remain future work.

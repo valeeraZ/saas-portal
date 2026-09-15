@@ -1,0 +1,28 @@
+name: saas-portal-integration
+services:
+  db:
+    image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+    environment:
+      POSTGRES_USER: saas_auth
+      POSTGRES_PASSWORD: ${SAAS_POSTGRES_PASSWORD}
+      POSTGRES_DB: saas_auth_integration
+    ports: ["127.0.0.1:55434:5432"]
+    volumes:
+      - ../.local/init.sql:/docker-entrypoint-initdb.d/portal.sql:ro
+      - integration-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U saas_auth -d saas_auth_integration"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.3@sha256:ff4257d0d64efbe99ed1ddfaf07765cc3c36dc7518bf8324d41961327f441c54
+    command: ["start-dev", "--import-realm", "--hostname=https://127.0.0.1:59443", "--https-certificate-file=/opt/keycloak/conf/tls.crt", "--https-certificate-key-file=/opt/keycloak/conf/tls.key"]
+    ports: ["127.0.0.1:59443:8443"]
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    volumes:
+      - ../.local/auth-config/.local/saas-local-realm.json:/opt/keycloak/data/import/saas-local-realm.json:ro
+      - ../.local/auth-config/.local/tls.crt:/opt/keycloak/conf/tls.crt:ro
+      - ../.local/auth-config/.local/tls.key:/opt/keycloak/conf/tls.key:ro
+volumes:
+  integration-db:

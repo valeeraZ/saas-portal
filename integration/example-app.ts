@@ -62,11 +62,26 @@ const server = createServer(async (req, res) => {
       req.headers.cookie ||
       req.headers.authorization ||
       req.headers["x-portal-key"] ||
-      req.headers["x-forwarded-host"]
+      (req.headers["x-forwarded-host"] &&
+        req.headers["x-forwarded-host"] !== req.headers.host)
     )
       return send(400, '{"error":"unsafe_forwarding"}');
     const path = new URL(req.url!, "http://example").pathname;
     const base = p.basePath;
+    if (path === "/reports/echo")
+      return send(
+        200,
+        JSON.stringify({
+          bytes: body.length,
+          hash: createHash("sha256").update(body).digest("hex"),
+          url: req.url,
+          contentType: req.headers["content-type"],
+          rsc: req.headers.rsc,
+          action: req.headers["next-action"],
+          state: req.headers["next-router-state-tree"],
+        }),
+      );
+
     if (path === "/reports/" || path === "/reports")
       return send(
         200,

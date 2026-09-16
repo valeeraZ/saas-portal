@@ -1,17 +1,17 @@
 {
   "name": "saas-portal",
   "version": "0.1.0",
-  "description": "客户入口与应用数据入口：导航、租户切换、偏好、会话 BFF、代理。只拥有偏好等 Portal 数据；Auth/Registry/计费事实通过服务 API 获取。",
+  "description": "\u5ba2\u6237\u5165\u53e3\u4e0e\u5e94\u7528\u6570\u636e\u5165\u53e3\uff1a\u5bfc\u822a\u3001\u79df\u6237\u5207\u6362\u3001\u504f\u597d\u3001\u4f1a\u8bdd BFF\u3001\u4ee3\u7406\u3002\u53ea\u62e5\u6709\u504f\u597d\u7b49 Portal \u6570\u636e\uff1bAuth/Registry/\u8ba1\u8d39\u4e8b\u5b9e\u901a\u8fc7\u670d\u52a1 API \u83b7\u53d6\u3002",
   "scripts": {
-    "dev": "next dev --hostname 127.0.0.1 --port 58999",
+    "dev": "node server.ts --dev",
     "build": "next build",
-    "start": "next start --hostname 127.0.0.1 --port 58999",
+    "start": "node server.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/*.test.ts",
     "db:migrate": "node scripts/migrate.ts",
     "session:prune": "node scripts/prune.ts",
     "test:integration": "bash integration/test.sh",
-    "format:check": "prettier --check app lib scripts tests integration/*.ts next.config.ts"
+    "format:check": "prettier --check app lib scripts tests integration/*.ts next.config.ts proxy.ts server.ts"
   },
   "license": "ISC",
   "type": "module",

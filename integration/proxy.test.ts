@@ -207,6 +207,56 @@ try {
   const events = await ctx.request.get(aUrl + "events");
   assert.equal(events.status(), 200);
   assert.match(await events.text(), /data: complete/);
+
+  const query = "?tag=one&tag=two&encoded=%E4%B8%AD%20%E6%96%87";
+  const queryResponse = await ctx.request.get(aUrl + "echo" + query, {
+    headers: { rsc: "1", "next-router-state-tree": '["reports"]' },
+  });
+  assert.equal(queryResponse.status(), 200);
+  const queryData = await queryResponse.json();
+  assert.equal(queryData.url, "/reports/echo" + query);
+  assert.equal(queryData.rsc, "1");
+  assert.equal(queryData.state, '["reports"]');
+  const multipartBody = Buffer.from(
+    '--native-boundary\r\nContent-Disposition: form-data; name="file"; filename="hello.txt"\r\nContent-Type: text/plain\r\n\r\nhello 世界\r\n--native-boundary--\r\n',
+  );
+  for (const data of [multipartBody, Buffer.alloc(8 * 1024 * 1024, 97)]) {
+    const response = await ctx.request.post(aUrl + "echo", {
+      headers: {
+        origin,
+        "content-type": "multipart/form-data; boundary=native-boundary",
+        "next-action": "test-action",
+      },
+      data,
+    });
+    assert.equal(response.status(), 200);
+    const echoed = await response.json();
+    assert.equal(echoed.bytes, data.length);
+    assert.equal(echoed.hash, createHash("sha256").update(data).digest("hex"));
+    assert.equal(echoed.action, "test-action");
+  }
+  const oversized = await ctx.request.post(aUrl + "echo", {
+    headers: { origin },
+    data: Buffer.alloc(8 * 1024 * 1024 + 1),
+  });
+  assert.equal(oversized.status(), 413);
+  const chunked = await fetch(aUrl + "echo", {
+    method: "POST",
+    headers: { origin, cookie: cookie.name + "=" + cookie.value },
+    body: new ReadableStream({
+      start(controller) {
+        controller.enqueue(Buffer.alloc(8 * 1024 * 1024 + 1));
+        controller.close();
+      },
+    }),
+    duplex: "half",
+    signal: AbortSignal.timeout(10000),
+  } as RequestInit & { duplex: string });
+  assert.equal(chunked.status, 413);
+
+  console.log(
+    "PASS native rewrite preserves query/RSC headers, multipart and exact 8 MiB bodies; rejects oversized upload",
+  );
   const direct = await fetch("http://127.0.0.1:59200/reports/api/notes");
   assert.equal(direct.status, 401);
   const forged = await fetch("http://127.0.0.1:59200/reports/api/notes", {

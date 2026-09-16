@@ -31,3 +31,7 @@ Tenant pages now consume the real Admin catalog using server-only PORTAL_ADMIN_U
 ## 2026-09-16 — tenant application HTTP proxy
 
 Application cards now open `/tenants/{tenantId}/apps/{mount}/`. A Node route handler performs session validation and private Admin route authorization for each page/resource/API request; explicit target allowlist, filtered headers, tenant-preserving redirects and signed per-request app assertions protect the forwarding boundary. Real example backend validates the assertion and stores notes in a separate tenant-scoped database. See docs/TENANT-APP-PROXY.md and docs/PROXY-VALIDATION.md. HTTP and bounded SSE only; WebSockets and legacy Next application adapters remain future work.
+
+## 2026-09-16 — native Proxy transport implemented
+
+PR #6 now uses root proxy.ts and native external rewrite. The old route handler is a fail-closed 503 fallback, and server.ts is the required public response-protection entry. Session/real Admin authorization, body-bound RS256 assertions and tenant isolation remain enforced per request. Nine unit tests, type/format checks, production build and real Auth/Keycloak/Admin/report-backend integration passed, including multipart, exact-8-MiB replay and oversized Content-Length/chunked rejection. See [native validation](NATIVE-PROXY-VALIDATION.md). Full SDK-aware Next.js child-application RSC/Server Actions/assets and Upgrade compatibility remain unvalidated; no merge or production deployment occurred.

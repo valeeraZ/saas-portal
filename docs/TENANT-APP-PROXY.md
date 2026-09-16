@@ -1,5 +1,7 @@
 # Tenant application proxy
 
+> Updated to Next.js 16 native `proxy.ts` / external rewrite. Run the protected custom server entry (`npm start`); the Route Handler is now only a fail-closed fallback. See [native migration and validation](NATIVE-PROXY-VALIDATION.md). Full SDK-aware Next.js child-application compatibility remains a separate integration increment.
+
 Implemented 2026-09-16. Entry URL: `/tenants/{tenantId}/apps/{mount}/...`. For example `/tenants/UUID/apps/reports/` maps to `/reports/` at the authorized deployment origin. Tenant identity is part of every URL, including assets and API calls, so separate tabs do not share a mutable tenant selection cookie.
 
 ## Request boundary
@@ -11,7 +13,7 @@ Implemented 2026-09-16. Entry URL: `/tenants/{tenantId}/apps/{mount}/...`. For e
 
 The application receives `X-Saas-Request`, an RS256 JWT issued by `PORTAL_ORIGIN` with the application UUID as audience, the stable Auth user ID as subject, `iat`, `exp` (30 seconds), `jti`, `tenantId`, `roles`, `deploymentId`, `method`, `path` (upstream path including query), `basePath` (full public tenant/application prefix) and SHA-256 `bodyHash`. Configure the private signing key only on Portal and the public verification key on each app. Pin issuer/audience/algorithm and bind all request fields before handling business data. The example rejects replay using its own PostgreSQL table shared by backend replicas. Use a coordinated key rotation plan; the current example loads one configured public key.
 
-Auth access/refresh tokens, Portal cookies, Admin service key, browser-provided identity headers and forwarding headers are never sent upstream. App `Set-Cookie`, internal headers and hop-by-hop headers are not returned. App state should use its tenant-scoped API; this proxy does not support application cookies or forwarding end-user Authorization headers.
+Auth access/refresh tokens, Portal cookies, Admin service key, browser-provided identity and forwarding headers are never trusted upstream. Next adds X-Forwarded-Host from the authorized target Host. App `Set-Cookie`, internal headers and hop-by-hop headers are not returned. App state should use its tenant-scoped API; this proxy does not support application cookies or forwarding end-user Authorization headers.
 
 Writes require an exact Origin match to the configured Portal origin; body size is capped at 8 MiB. Bodies are buffered to sign their hash; HTTP responses are streamed. Requests/streams are bounded to 30 seconds and honor client cancellation. GET/HEAD must be read-only at the application. Successful route resolution covers that request, not a perpetual grant for a long-lived connection.
 

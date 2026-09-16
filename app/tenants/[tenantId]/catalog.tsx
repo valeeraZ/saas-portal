@@ -39,7 +39,12 @@ export default function Applications({ initial }: { initial: Catalog }) {
             <h3>{item.name}</h3>
             <p>{item.description}</p>
             <small>你的角色：{item.roles.join("、")}</small>
-            <button disabled>应用入口即将开放</button>
+            <a
+              className="button"
+              href={`/tenants/${data.tenantId}/apps${item.suffix}/`}
+            >
+              打开应用
+            </a>
           </article>
         ))}
       </div>

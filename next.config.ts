@@ -1,5 +1,8 @@
 import type { NextConfig } from "next";
 const config: NextConfig = {
+  skipTrailingSlashRedirect: true,
+  skipProxyUrlNormalize: true,
+  experimental: { proxyClientMaxBodySize: "9mb" },
   async headers() {
     return [
       {

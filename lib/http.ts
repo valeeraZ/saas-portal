@@ -16,8 +16,8 @@ export function cookieOptions(maxAge: number) {
     maxAge,
   };
 }
-export async function session(): Promise<Session> {
-  const id = (await cookies()).get(cookieName())?.value;
+export async function session(sessionId?: string): Promise<Session> {
+  const id = sessionId ?? (await cookies()).get(cookieName())?.value;
   const value = id
     ? await refreshed(id, async (s) => {
         if (!s.refreshToken) throw new Error("unauthorized");

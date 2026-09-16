@@ -24,3 +24,7 @@ npm run build
 ```
 
 生产配置通过环境注入；`.env.example` 不包含可用凭据。所有在线写入都由 Auth 校验权限和持久化租户事实。Admin 导航、代理及旧偏好/SDK 的抽取尚未完成，PORTAL-02 继续开放。
+
+## Next.js 16 原生 Proxy
+
+应用请求由 `proxy.ts` 完成会话和实时授权后使用 external rewrite 转发。运行 `npm start` / `npm run dev`，通过 `server.ts` 保留响应 Cookie 过滤、租户内重定向和流式超时边界；不要使用裸 `next start` 作为部署入口。验证与完整 SDK/Next.js 子应用兼容性的剩余工作见 [原生迁移记录](docs/NATIVE-PROXY-VALIDATION.md)。

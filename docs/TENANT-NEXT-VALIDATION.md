@@ -11,7 +11,18 @@ Immutable public build JS/CSS/fonts are routed only through `/app-assets/{mount}
 3. Add loopback ports 59300 and 59301 to Admin's and Portal's reviewed target allowlists. Set `PORTAL_NEXT_APP_ORIGINS=http://127.0.0.1:59300,http://127.0.0.1:59301`, and `PORTAL_APP_ASSETS` to the JSON below. Restart Admin with its updated operator config, rebuild Portal and launch the protected entry through integration/run.py portal.
 
 ```json
-[{"mount":"next-reports","version":"demo1","origin":"http://127.0.0.1:59300"},{"mount":"next-metrics","version":"demo1","origin":"http://127.0.0.1:59301"}]
+[
+  {
+    "mount": "next-reports",
+    "version": "demo1",
+    "origin": "http://127.0.0.1:59300"
+  },
+  {
+    "mount": "next-metrics",
+    "version": "demo1",
+    "origin": "http://127.0.0.1:59301"
+  }
+]
 ```
 
 ```sh
@@ -36,6 +47,8 @@ The test provisions two real tenants, reviewed deployments, installations and re
 
 ## Limits and deployment
 
-These are local real-service results; no production deployment, HA/load or browser-engine matrix certification occurred. Image optimization is restricted to application public files, not remote or protected tenant data. WebSocket, application Cookies and automated Registry asset-metadata projection remain separate work. Run the protected Portal entry and the SDK application adapter; bare next start does not establish these response/request boundaries. Public packages were not released.
+These are local real-service results; no production deployment, HA/load or browser-engine matrix certification occurred. Image optimization is restricted to application public files, not remote or protected tenant data. WebSocket and application Cookies remain separate work. Run the protected Portal entry and the SDK application adapter; bare next start does not establish these response/request boundaries. Public packages were not released.
+
+The current environment-backed origin and asset projections are an integration baseline. Requiring a Portal configuration change and restart for a new origin or every Next.js asset version is not an acceptable final onboarding workflow. The [runtime application registry](APP-REGISTRY-RUNTIME-CONFIG.md) is a required production feature and defines the Admin metadata, independent Portal checks, transition and acceptance criteria. Production self-service onboarding remains incomplete until that feature is delivered.
 
 SDK protocol and template guidance: saas-sdk/docs/TENANT-NEXT-SDK.md. Existing native transport verification remains in NATIVE-PROXY-VALIDATION.md; its earlier full-Next compatibility limitations are superseded for the flows explicitly tested above.

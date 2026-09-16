@@ -43,3 +43,7 @@ npm run test:integration
 Keycloak 客户端 `saas-portal` 为 confidential client，开启 code flow、强制 S256 PKCE、关闭 password grant 与 service account；回调 `PORTAL_ORIGIN/api/auth/callback`，退出回调 `PORTAL_ORIGIN/`。访问令牌带 `saas-auth` audience；Auth 用户客户端白名单包含 `saas-portal`。Portal 只持有该客户端凭据，不持有 Auth introspection 或会话 worker 凭据。
 
 生成配置中的 Auth / Portal 使用不同数据库及账号。生产启动先注入 `.env.example` 对应变量并执行会话迁移，再 `npm run build && npm start`，由入口提供 HTTPS；`PORTAL_ORIGIN` 必须与入口一致。定期运行 `npm run session:prune` 清理过期会话。所有副本共享数据库和稳定的 32 字节会话加密密钥。生产不可启用回环 HTTP 例外或使用本地测试证书。
+
+## Real Admin directory
+
+Configure `PORTAL_ADMIN_URL` and `PORTAL_ADMIN_KEY` on the Portal server. The matching Admin service must have the same key, its own database and ADMIN_AUTH_URL. Use saas-admin/integration/README.md to start and test the real catalog. Missing/unavailable Admin is shown as “应用目录暂时不可用”; a verified empty response shows “暂无可用应用”. Application launching/proxying is not part of this directory increment.

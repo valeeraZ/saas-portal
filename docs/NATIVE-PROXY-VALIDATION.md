@@ -26,3 +26,7 @@ Reproduce using the existing setup in `TENANT-APP-PROXY.md`, with Portal launche
 ## Remaining compatibility work
 
 These are local HTTP/native-transport results, not a full Next.js child-application or production certification. The report backend is not a Next.js application. Preserving protocol headers alone does not validate RSC routing, Server Actions, dynamic asset namespaces, image optimization, application Cookie support or two Next.js child applications sharing one origin. SDK configuration, routes, verified server context and navigation helpers remain the next integration increment. Existing apps must derive URLs from the verified public basePath and independently verify the assertion and tenant data scope. No public package, production deployment or PR merge occurred.
+
+## Subsequent SDK / Next.js verification
+
+The later packed-SDK integration now validates two real Next.js child applications, RSC navigation, hydrated Server Actions, resource namespaces/public-file image optimization and same-build dual-tenant persistence. See [Tenant Next validation](TENANT-NEXT-VALIDATION.md) for the exact coverage and remaining limits; the earlier report-backend-only statement above describes the first migration increment.

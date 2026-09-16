@@ -47,7 +47,13 @@ export async function forward(
     if (length && Number(length) > 8 * 1024 * 1024) throw new ProxyError(413);
     const s = await session(request.cookies.get(cookieName())?.value ?? "");
     const route = await resolveRoute(params.tenantId, params.mount, s);
-    const url = new URL(upstream, target(route.targetOrigin));
+    const nextApp = (process.env.PORTAL_NEXT_APP_ORIGINS ?? "")
+      .split(",")
+      .includes(route.targetOrigin);
+    const url = new URL(
+      nextApp ? request.nextUrl.pathname : upstream,
+      target(route.targetOrigin),
+    );
     url.search = new URL(request.url).search;
     const body = safe ? Buffer.alloc(0) : await bodyBytes(request.clone());
     const headers = new Headers();

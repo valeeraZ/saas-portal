@@ -47,3 +47,7 @@ Keycloak 客户端 `saas-portal` 为 confidential client，开启 code flow、�
 ## Real Admin directory
 
 Configure `PORTAL_ADMIN_URL` and `PORTAL_ADMIN_KEY` on the Portal server. The matching Admin service must have the same key, its own database and ADMIN_AUTH_URL. Use saas-admin/integration/README.md to start and test the real catalog. Missing/unavailable Admin is shown as “应用目录暂时不可用”; a verified empty response shows “暂无可用应用”. Application launching/proxying is not part of this directory increment.
+
+## Runtime Registry regression
+
+The historical scripts above exercise the explicitly selected `PORTAL_REGISTRY_MODE=environment` baseline. Fresh `prepare.py` config records that choice. To run the new default Admin mode, follow [Runtime Registry validation](../docs/RUNTIME-REGISTRY-VALIDATION.md); it starts independent built Portal/Admin replicas and creates uniquely named disposable databases. Do not combine its configuration with `.env.local` from the historical stack.

@@ -1,8 +1,10 @@
+import { registryMode } from "./lib/runtime-registry.ts";
 import next from "next";
 import { createServer as httpServer, type RequestListener } from "node:http";
 import { createServer as httpsServer } from "node:https";
 import { readFileSync } from "node:fs";
 import { protectAppResponse } from "./lib/app-response.ts";
+registryMode();
 const port = Number(process.env.PORT ?? 58999);
 const hostname = process.env.PORTAL_BIND_HOST ?? "127.0.0.1";
 const app = next({ dev: process.argv.includes("--dev"), hostname, port });

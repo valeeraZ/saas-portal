@@ -1,5 +1,6 @@
+import { registryMode } from "./runtime-registry.ts";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { appPath, redirectLocation } from "./app-routing.ts";
+import { appPath, redirectLocation, target } from "./app-routing.ts";
 
 // External rewrite streams upstream responses directly. This public entry point
 // applies the response boundary before Node commits any upstream headers.
@@ -11,6 +12,8 @@ export function protectAppResponse(req: IncomingMessage, res: ServerResponse) {
   const asset = original.pathname.startsWith("/app-assets/");
   if (!match && !asset) return;
   delete req.headers["x-saas-request"];
+  delete req.headers["x-saas-route-origin"];
+  delete req.headers["x-saas-route-runtime"];
   const writeHead = res.writeHead.bind(res);
   const write = res.write.bind(res);
   const end = res.end.bind(res);
@@ -49,13 +52,25 @@ export function protectAppResponse(req: IncomingMessage, res: ServerResponse) {
           const origins = (process.env.PORTAL_ALLOWED_APP_ORIGINS ?? "").split(
             ",",
           );
-          const origin = origins.find(
-            (value) => value && new URL(value).host === host,
-          );
+          const origin =
+            registryMode() === "admin"
+              ? target(String(req.headers["x-saas-route-origin"] ?? ""))
+              : origins.find((value) => value && new URL(value).host === host);
           if (!origin) throw new Error("missing trusted response origin");
-          const dynamic = (process.env.PORTAL_NEXT_APP_ORIGINS ?? "")
-            .split(",")
-            .includes(origin);
+          if (new URL(origin).host !== host)
+            throw new Error("response origin mismatch");
+          const runtime = req.headers["x-saas-route-runtime"];
+          if (
+            registryMode() === "admin" &&
+            !["http", "nextjs"].includes(String(runtime))
+          )
+            throw new Error("missing trusted runtime");
+          const dynamic =
+            registryMode() === "admin"
+              ? runtime === "nextjs"
+              : (process.env.PORTAL_NEXT_APP_ORIGINS ?? "")
+                  .split(",")
+                  .includes(origin);
           const suffix = dynamic ? base : "/" + match[2];
           const upstreamUrl = new URL(
             (dynamic ? original.pathname : upstream) + original.search,
@@ -79,12 +94,7 @@ export function protectAppResponse(req: IncomingMessage, res: ServerResponse) {
           if (location)
             res.setHeader(
               "location",
-              redirectLocation(
-                String(location),
-                new URL(upstream + original.search, origin),
-                base,
-                suffix,
-              ),
+              redirectLocation(String(location), upstreamUrl, base, suffix),
             );
         }
       } catch {

@@ -1,6 +1,18 @@
 # Runtime application registry
 
-## Status and priority
+## Implementation (2026-09-20)
+
+Implemented on `codex/runtime-application-registry` from main `e0e177f`. Admin mode is now the default. Business requests use private `/runtime-route`; public build assets use private `/v1/runtime/assets`. Both resolve online on every request with no cache or stale fallback. Runtime type is per deployment, so HTTP and Next.js applications can share an origin. Browser input never selects the origin.
+
+Set `PORTAL_REGISTRY_MODE=admin`, `PORTAL_APP_DNS_SUFFIXES` (strict HTTPS subdomains/default port) and/or `PORTAL_APP_EGRESS_ORIGINS` (exact infrastructure exceptions). Remove all three old deployment projection variables, including `PORTAL_APP_ASSETS=[]`; mixed ownership fails startup. Keep `PORTAL_ADMIN_URL`, service key and app signing key. Use the required `server.ts` entry to preserve redirect/Cookie/timeout enforcement. The response boundary receives only Proxy-generated origin/runtime metadata; incoming copies are stripped before routing.
+
+Admin migration 003 and reviewed runtime records must be deployed before switching Portal. This one-time transition needs a Portal restart. New applications and builds within the static network policy need only Admin operator changes afterwards. Legacy projections below are supported only with explicit `PORTAL_REGISTRY_MODE=environment`; Registry failures never switch modes. Existing legacy integration preparation explicitly selects that mode.
+
+Freshness bound: cache TTL **0** on every replica; reads after Admin primary commit observe revocation/replacement. Requests already authorized may complete within the existing 30-second response deadline. All public asset responses are also no-store. Old-version retention is enforced by Admin database time and Portal's deadline validation; downloaded bytes cannot be recalled. Retain old upstreams and application action/API compatibility during the operator-selected window.
+
+Runbook: saas-admin `docs/RUNTIME-REGISTRY.md`. Reproducible tests and scope: [validation](RUNTIME-REGISTRY-VALIDATION.md). The original requirements below remain the acceptance contract; references to environment-backed behavior describe the pre-migration baseline.
+
+## Original status and priority
 
 Automated runtime application registration is a **required production onboarding feature**. The environment-backed lists in Portal PR #6 are a reviewed integration baseline, not the final onboarding control plane. Production self-service onboarding is not complete while adding an application or publishing a Next.js build requires changing Portal environment variables or restarting Portal.
 

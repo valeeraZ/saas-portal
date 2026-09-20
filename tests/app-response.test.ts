@@ -1,3 +1,4 @@
+process.env.PORTAL_REGISTRY_MODE = "environment";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";

@@ -1,3 +1,4 @@
+import { registryMode } from "./runtime-registry.ts";
 import { NextResponse, type NextRequest } from "next/server";
 import { readFileSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
@@ -47,9 +48,12 @@ export async function forward(
     if (length && Number(length) > 8 * 1024 * 1024) throw new ProxyError(413);
     const s = await session(request.cookies.get(cookieName())?.value ?? "");
     const route = await resolveRoute(params.tenantId, params.mount, s);
-    const nextApp = (process.env.PORTAL_NEXT_APP_ORIGINS ?? "")
-      .split(",")
-      .includes(route.targetOrigin);
+    const nextApp =
+      registryMode() === "admin"
+        ? route.runtime === "nextjs"
+        : (process.env.PORTAL_NEXT_APP_ORIGINS ?? "")
+            .split(",")
+            .includes(route.targetOrigin);
     const url = new URL(
       nextApp ? request.nextUrl.pathname : upstream,
       target(route.targetOrigin),
@@ -78,6 +82,9 @@ export async function forward(
     }
     headers.set("accept-encoding", "identity");
     headers.set("host", url.host);
+    // These are set only after online authorization; ingress strips client copies.
+    headers.set("x-saas-route-origin", url.origin);
+    headers.set("x-saas-route-runtime", nextApp ? "nextjs" : "http");
     privateKey ??= importPKCS8(
       readFileSync(process.env.PORTAL_APP_SIGNING_KEY_FILE!, "utf8"),
       "RS256",

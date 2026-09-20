@@ -35,3 +35,7 @@ Application cards now open `/tenants/{tenantId}/apps/{mount}/`. A Node route han
 ## 2026-09-16 — native Proxy transport implemented
 
 PR #6 now uses root proxy.ts and native external rewrite. The old route handler is a fail-closed 503 fallback, and server.ts is the required public response-protection entry. Session/real Admin authorization, body-bound RS256 assertions and tenant isolation remain enforced per request. Nine unit tests, type/format checks, production build and real Auth/Keycloak/Admin/report-backend integration passed, including multipart, exact-8-MiB replay and oversized Content-Length/chunked rejection. See [native validation](NATIVE-PROXY-VALIDATION.md). Full SDK-aware Next.js child-application RSC/Server Actions/assets and Upgrade compatibility remain unvalidated; no merge or production deployment occurred.
+
+## 2026-09-20 — Runtime Application Registry
+
+Based on merged main `e0e177f`, branch `codex/runtime-application-registry` makes Admin the default runtime source. Runtime/business and public asset lookups are online per request with no cached allow or stale fallback. The independent Portal egress policy supports approved DNS subdomains and exact exceptions. Mixed legacy ownership fails startup; legacy local/emergency use requires explicit environment mode. Native response protection now uses Proxy-generated origin/runtime context so dynamic deployments preserve redirect/Cookie boundaries. See APP-REGISTRY-RUNTIME-CONFIG.md and RUNTIME-REGISTRY-VALIDATION.md. Auth/SDK protocol changes are not required.

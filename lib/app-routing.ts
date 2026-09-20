@@ -1,3 +1,9 @@
+import {
+  registryMode,
+  infrastructureOrigin,
+  runtimeMetadata,
+  type RuntimeMetadata,
+} from "./runtime-registry.ts";
 import { readJson } from "./security.ts";
 import type { Session } from "./store.ts";
 export class ProxyError extends Error {
@@ -15,6 +21,7 @@ export type Route = {
   suffix: string;
   targetOrigin: string;
   roles: string[];
+  runtime?: RuntimeMetadata["runtime"];
 };
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 export function appPath(tenant: string, mount: string, parts: string[] = []) {
@@ -34,6 +41,7 @@ export function appPath(tenant: string, mount: string, parts: string[] = []) {
   };
 }
 export function target(value: string) {
+  if (registryMode() === "admin") return infrastructureOrigin(value);
   const u = new URL(value);
   const allowed = (process.env.PORTAL_ALLOWED_APP_ORIGINS ?? "")
     .split(",")
@@ -78,7 +86,10 @@ export async function resolveRoute(
     throw new ProxyError(503);
   const key = process.env.PORTAL_ADMIN_KEY;
   if (!key) throw new ProxyError(503);
-  const url = new URL(`/v1/tenants/${tenant}/route`, base);
+  const url = new URL(
+    `/v1/tenants/${tenant}/${registryMode() === "admin" ? "runtime-route" : "route"}`,
+    base,
+  );
   url.searchParams.set("suffix", "/" + mount);
   const r = await fetch(url, {
     headers: { authorization: `Bearer ${s.accessToken}`, "x-portal-key": key },
@@ -88,7 +99,9 @@ export async function resolveRoute(
   });
   if (!r.ok)
     throw new ProxyError([401, 403, 404].includes(r.status) ? r.status : 503);
-  const v = (await readJson(r)) as Route;
+  if (!r.headers.get("content-type")?.startsWith("application/json"))
+    throw new ProxyError(503);
+  const v = (await readJson(r, 16384)) as Route;
   if (
     !v ||
     v.tenantId !== tenant ||
@@ -105,6 +118,7 @@ export async function resolveRoute(
     )
   )
     throw new ProxyError(502);
+  if (registryMode() === "admin") runtimeMetadata(v, mount);
   target(v.targetOrigin);
   return v;
 }

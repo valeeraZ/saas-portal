@@ -7,7 +7,7 @@ export async function proxy(request: NextRequest) {
   if (request.nextUrl.pathname.startsWith("/app-assets/")) {
     try {
       if (!["GET", "HEAD"].includes(request.method)) throw new ProxyError(405);
-      const url = publicAppAsset(request.nextUrl);
+      const url = await publicAppAsset(request.nextUrl);
       return NextResponse.rewrite(url, {
         request: {
           headers: new Headers({

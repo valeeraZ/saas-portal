@@ -2,7 +2,7 @@
 
 客户入口与应用数据入口：导航、租户切换、偏好、会话 BFF、代理。只拥有偏好等 Portal 数据；Auth/Registry/计费事实通过服务 API 获取。
 
-状态：执行准备完成，产品代码尚未迁入。
+状态：已实现身份/租户入口、应用目录、Next.js Proxy 和 Runtime Application Registry；详情以当前交接文档为准。
 
 - [执行清单](docs/EXECUTION.md)
 - [新 session 交接](docs/HANDOFF.md)
@@ -28,3 +28,7 @@ npm run build
 ## Next.js 16 原生 Proxy
 
 应用请求由 `proxy.ts` 完成会话和实时授权后使用 external rewrite 转发。运行 `npm start` / `npm run dev`，通过 `server.ts` 保留响应 Cookie 过滤、租户内重定向和流式超时边界；不要使用裸 `next start` 作为部署入口。验证与完整 SDK/Next.js 子应用兼容性的剩余工作见 [原生迁移记录](docs/NATIVE-PROXY-VALIDATION.md)。
+
+## Runtime Application Registry
+
+默认 `PORTAL_REGISTRY_MODE=admin`：应用目标、运行时类型和版本资源由 Admin 动态解析，不缓存授权或旧路由。先部署 Admin migration 003 并审核部署记录，再按 [迁移说明](docs/APP-REGISTRY-RUNTIME-CONFIG.md) 配置独立网络边界并删除旧环境投影。迁移后新增应用和发布版本无需重启 Portal。[验证步骤与范围](docs/RUNTIME-REGISTRY-VALIDATION.md)。

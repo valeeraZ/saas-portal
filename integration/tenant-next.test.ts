@@ -253,7 +253,10 @@ try {
   assert.equal(entry?.status(), 200);
   await page.getByRole("heading", { name: first.title, exact: true }).waitFor();
   assert.equal(await page.title(), first.title);
-  await page.getByText("流式内容已加载", { exact: true }).waitFor();
+  await page
+    .getByRole("main")
+    .getByText("流式内容已加载", { exact: true })
+    .waitFor();
   await page.waitForFunction(() =>
     [...document.images].every(
       (image) => image.complete && image.naturalWidth > 0,
@@ -279,7 +282,7 @@ try {
     "Packed SDK CSS must match Portal UI",
   );
   assert.equal(
-    await page.locator("main").count(),
+    await page.getByRole("main").count(),
     1,
     "Child must render one shared Shell",
   );
@@ -299,7 +302,10 @@ try {
   await page.getByRole("button", { name: "\u8bed\u8a00", exact: true }).click();
   await page.getByRole("menuitem", { name: "English", exact: true }).click();
   await page.waitForFunction(() => document.documentElement.lang === "en");
-  await page.getByText("Streamed content loaded", { exact: true }).waitFor();
+  await page
+    .getByRole("main")
+    .getByText("Streamed content loaded", { exact: true })
+    .waitFor();
   await page.screenshot({
     path: "/private/tmp/saa10-child-dark-en.png",
     fullPage: true,
@@ -396,8 +402,12 @@ try {
       nextAssets.push(response.url());
   });
   await tab.goto(secondUrl);
+  await tab.bringToFront();
   await tab.getByRole("heading", { name: second.title, exact: true }).waitFor();
-  await tab.getByText("流式内容已加载", { exact: true }).waitFor();
+  await tab
+    .getByRole("main")
+    .getByText("流式内容已加载", { exact: true })
+    .waitFor();
   await tab.waitForFunction(() =>
     [...document.images].every(
       (image) => image.complete && image.naturalWidth > 0,
@@ -411,13 +421,47 @@ try {
   await tab.evaluate(async () => {
     await document.fonts.ready;
   });
-  assert.equal(
-    await tab
-      .getByRole("link", { name: "\u8bb0\u5f55\u9875\u9762", exact: true })
-      .evaluate((element) => getComputedStyle(element).height),
-    "32px",
-    "Installed shared button styles must apply to the visible application action",
-  );
+  await tab
+    .waitForFunction(
+      () => {
+        const action = [
+          ...document.querySelectorAll(
+            'main a[data-slot="button"][data-variant="default"]',
+          ),
+        ].find((element) => (element as HTMLElement).checkVisibility());
+        return action && getComputedStyle(action).height === "32px";
+      },
+      null,
+      { timeout: 10000 },
+    )
+    .catch(async (error) => {
+      const diagnostic = await tab
+        .getByRole("main")
+        .getByRole("link", { name: "\u8bb0\u5f55\u9875\u9762", exact: true })
+        .evaluate((element) => ({
+          html: element.outerHTML,
+          height: getComputedStyle(element).height,
+          display: getComputedStyle(element).display,
+          styles: [...document.querySelectorAll('link[rel="stylesheet"]')].map(
+            (link) => ({
+              href: (link as HTMLLinkElement).href,
+              loaded: !!(link as HTMLLinkElement).sheet,
+              disabled: (link as HTMLLinkElement).sheet?.disabled,
+              media: (link as HTMLLinkElement).media,
+              rules: (link as HTMLLinkElement).sheet?.cssRules.length,
+              utilities: [
+                ...((link as HTMLLinkElement).sheet?.cssRules ?? []),
+              ].some((rule) => rule.cssText.includes(".inline-flex")),
+            }),
+          ),
+        }));
+      throw new Error(
+        "Shared action style: " + JSON.stringify({ diagnostic, appErrors }),
+        {
+          cause: error,
+        },
+      );
+    });
   await page.screenshot({
     path: "/private/tmp/sdk-tenant-next-desktop.png",
     fullPage: true,

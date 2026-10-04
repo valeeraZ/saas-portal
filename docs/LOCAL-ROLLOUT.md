@@ -42,6 +42,8 @@ Every listener uses a dynamically selected loopback port. Docker project `saas-s
 
 The rollback exercise demonstrates the existing HTTP projection. A real deployment must prepare complete legacy projections for every application/build it intends to serve after rollback; environment mode is not an automatic outage fallback. Retaining static assets only supports compatible API/Server Action releases; arbitrary breaking changes remain outside this guarantee.
 
+Admin rejects a resolution if its deployment changes while Auth permissions are being checked. An in-flight browser prefetch can therefore receive 403 during replacement; a fresh request resolves the new deployment. The positive browser release test drains automatic Link prefetches before replacement while keeping the old page loaded for its post-release action. It continues to reject unexpected browser HTTP failures and JavaScript errors. Only the scaffold's unused `.ttf` preload warning is excluded from console assertions because the sample overrides that font with system UI fonts.
+
 ## Evidence and cleanup
 
 The command prints its private temporary directory. `execution.log` contains service/test output; `result.json` records status, ports, image digests, source revisions, completed stages and cleanup status. Source revisions identify checkout commits; uncommitted local changes are also copied, so use clean reviewed checkouts for release evidence. Do not publish the generated configuration, realm or private log without checking for secrets.
@@ -60,4 +62,4 @@ The complete drill passed with Node 24.10, Keycloak 26.7.3, PostgreSQL 17 and ac
 
 Confirmed Portal session/data preservation during cutover, unchanged Portal process/build during Next.js onboarding and version replacement, successful old-tab Server Action after replacement, old asset expiry, and explicit rollback/forward rollout. Desktop 1280×720 and mobile 390×844 screenshots were inspected. All test containers, volumes and native processes were cleaned up; the result recorded `status: passed` and `cleanupSucceeded: true`.
 
-The first attempt omitted the HTTP origin from the test operator allowlist and was rejected before cutover; the harness was corrected and the subsequent full drill passed. That failed attempt also cleaned up its isolated resources. Portal unit, type, formatting and Python lint checks passed. Production rollout remains outside this local acceptance.
+An initial attempt omitted the HTTP origin from the test operator allowlist and was rejected before cutover. Repeated runs also exposed the intentional concurrent-resolution denial during browser prefetch; the harness now waits for those prefetches before testing a successful replacement. Failed attempts cleaned up their isolated resources. Portal unit, type, formatting and Python lint checks passed. Production rollout remains outside this local acceptance.

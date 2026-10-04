@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { join } from "node:path";
 import { importPKCS8, SignJWT } from "jose";
-import { createHash } from "node:crypto";
+import { createHash, X509Certificate } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { randomUUID } from "node:crypto";
@@ -35,8 +35,23 @@ const example = envFile(".local/example.env"),
 const origin = process.env.PORTAL_ORIGIN!;
 const assetVersion = process.env.SAAS_UI_ASSET_VERSION ?? "demo1";
 const tag = randomUUID().slice(0, 8);
+// Trust only this disposable fixture's public key in this browser process.
+// Context-level TLS overrides can still cause parallel asset retries in Chromium.
+const fixtureSpki = createHash("sha256")
+  .update(
+    new X509Certificate(
+      readFileSync(process.env.NODE_EXTRA_CA_CERTS!),
+    ).publicKey.export({ type: "spki", format: "der" }),
+  )
+  .digest("base64");
 const browser = await chromium.launch({
   headless: true,
+  args: [
+    "--ignore-certificate-errors-spki-list=" + fixtureSpki,
+    ...(process.env.PORTAL_NET_LOG
+      ? ["--log-net-log=" + process.env.PORTAL_NET_LOG]
+      : []),
+  ],
   executablePath: process.env.PORTAL_CHROMIUM,
 });
 const ctx = await browser.newContext({ ignoreHTTPSErrors: true });
@@ -396,8 +411,21 @@ try {
   );
   const secondUrl = origin + `/tenants/${a.id}/apps/${second.mount}/`;
   const nextAssets: string[] = [];
+  const styleDiagnostics: unknown[] = [];
 
-  tab.on("response", (response) => {
+  tab.on("response", async (response) => {
+    if (response.url().endsWith(".css")) {
+      try {
+        const bytes = await response.body();
+        styleDiagnostics.push({
+          url: response.url(),
+          status: response.status(),
+          length: bytes.length,
+          utility: bytes.toString().includes(".inline-flex"),
+          headers: response.headers(),
+        });
+      } catch {}
+    }
     if (response.url().includes("/app-assets/"))
       nextAssets.push(response.url());
   });
@@ -448,15 +476,26 @@ try {
               loaded: !!(link as HTMLLinkElement).sheet,
               disabled: (link as HTMLLinkElement).sheet?.disabled,
               media: (link as HTMLLinkElement).media,
-              rules: (link as HTMLLinkElement).sheet?.cssRules.length,
-              utilities: [
-                ...((link as HTMLLinkElement).sheet?.cssRules ?? []),
-              ].some((rule) => rule.cssText.includes(".inline-flex")),
+              rules: (() => {
+                try {
+                  return (link as HTMLLinkElement).sheet?.cssRules.length;
+                } catch {
+                  return "unreadable";
+                }
+              })(),
+              sheetHref: (link as HTMLLinkElement).sheet?.href,
+              crossOrigin: (link as HTMLLinkElement).crossOrigin,
             }),
           ),
         }));
       throw new Error(
-        "Shared action style: " + JSON.stringify({ diagnostic, appErrors }),
+        "Shared action style: " +
+          JSON.stringify({
+            diagnostic,
+            appErrors,
+            url: tab.url(),
+            styleDiagnostics,
+          }),
         {
           cause: error,
         },

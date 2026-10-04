@@ -25,6 +25,8 @@ From the Portal checkout:
 
 The runner copies Portal/Admin source and installed dependencies into a private temporary directory. It excludes Git, environment files, existing local configuration and build output. Fresh random credentials, signing/session keys and a short-lived test certificate are generated there. Auth uses the selected checkout and virtualenv with a separate generated configuration/database; the runner does not read the source checkout's credentials.
 
+The shared UI browser test trusts only the generated certificate's SPKI hash in its disposable Chromium process, avoiding certificate retries during parallel stylesheet requests. It does not change system trust or production TLS. For local network diagnosis, `PORTAL_NET_LOG=/absolute/private/path.json` enables Chromium's network log; keep this log private because it can contain test request URLs and authentication redirects.
+
 Platform listeners use dynamically selected loopback ports. The shared UI regression additionally requires free loopback ports 59300 and 59301; the runner checks these before starting. Docker project `saas-saa7-<random>` and its database volume belong exclusively to this run. Existing application processes, containers, local `.env.local` files and databases are not reused. Port allocation fails visibly if a concurrent process takes a selected port.
 
 ## Sequence and acceptance

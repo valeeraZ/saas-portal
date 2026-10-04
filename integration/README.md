@@ -54,3 +54,5 @@ The historical scripts above exercise the explicitly selected `PORTAL_REGISTRY_M
 
 
 For SAA-6 real identity coverage in Admin Registry mode, use `npm run test:keycloak-registry` after preparing the real Admin/example stack. See the real-Keycloak section of [Runtime Registry validation](../docs/RUNTIME-REGISTRY-VALIDATION.md) for configuration, isolated failure injection and executed results.
+
+For a fresh self-contained local rollout, cutover and rollback drill, run `integration/local-rollout.py` with Auth's virtualenv Python. See [Local rollout](../docs/LOCAL-ROLLOUT.md) for prerequisites, lifecycle, real Next.js acceptance and cleanup.

@@ -19,6 +19,8 @@ type Options = {
   publicKey: string;
   children: ChildProcess[];
   command: (body: unknown, key?: string) => Promise<void>;
+  authorize?: (tenantId: string, appId: string) => Promise<void>;
+  retentionMs?: number;
 };
 export async function runtimeNext(o: Options) {
   const specs = [
@@ -138,7 +140,8 @@ export async function runtimeNext(o: Options) {
     });
   }
   for (const dep of [deployments[0], deployments[2]])
-    for (const tenantId of o.tenants)
+    for (const tenantId of o.tenants) {
+      await o.authorize?.(tenantId, dep.appId);
       await o.command({
         kind: "installation",
         tenantId,
@@ -148,17 +151,24 @@ export async function runtimeNext(o: Options) {
         entitled: true,
         validUntil: "2099-01-01T00:00:00Z",
       });
+    }
   const browser = await chromium.launch({
     headless: true,
     executablePath: process.env.PORTAL_CHROMIUM,
   });
   try {
-    const ctx = await browser.newContext();
+    const ctx = await browser.newContext({
+      ignoreHTTPSErrors: o.portal.startsWith("https:"),
+    });
+    const separator = o.cookie.indexOf("=");
     await ctx.addCookies([
       {
-        name: "portal-session",
-        value: o.cookie.slice("portal-session=".length),
+        name: o.cookie.slice(0, separator),
+        value: o.cookie.slice(separator + 1),
         url: o.portal,
+        secure: o.portal.startsWith("https:"),
+        httpOnly: true,
+        sameSite: "Lax",
       },
     ]);
     const page = await ctx.newPage(),
@@ -215,11 +225,12 @@ export async function runtimeNext(o: Options) {
       (u) => u.includes("/demo1/") && u.endsWith(".js"),
     );
     assert.ok(oldAsset);
+    const assetsUntil = Date.now() + (o.retentionMs ?? 60000);
     await o.command({
       kind: "replace-deployment",
       deploymentId: deployments[0].id,
       replacementId: deployments[1].id,
-      assetsUntil: new Date(Date.now() + 60000).toISOString(),
+      assetsUntil: new Date(assetsUntil).toISOString(),
     });
     // The old tab can still use its loaded action and old immutable build assets.
     await oldTab
@@ -235,6 +246,15 @@ export async function runtimeNext(o: Options) {
       [...assets].some((u) => u.includes("/demo2/") && u.endsWith(".js")),
     );
     assert.equal((await ctx.request.get(oldAsset)).status(), 200);
+    if (o.retentionMs !== undefined) {
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.max(0, assetsUntil - Date.now() + 250)),
+      );
+      assert.notEqual((await ctx.request.get(oldAsset)).status(), 200);
+      console.log(
+        "PASS old Next.js resources expire at the configured retention deadline",
+      );
+    }
     await page.screenshot({
       path: "/private/tmp/runtime-registry-next-desktop.png",
       fullPage: true,

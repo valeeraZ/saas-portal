@@ -465,7 +465,7 @@ try {
     // Explicit opt-in: only pause the disposable Keycloak container belonging to this test.
     const keycloak = process.env.KEYCLOAK_TEST_CONTAINER;
     if (keycloak) {
-      assert.match(keycloak, /^saas-saa6-[a-z0-9-]+-keycloak-1$/);
+      assert.match(keycloak, /^saas-saa[67]-[a-z0-9-]+-keycloak-1$/);
       execFileSync("docker", ["pause", keycloak], { stdio: "ignore" });
       try {
         assert.equal((await ctx.request.get(aUrl + "api/notes")).status(), 503);

@@ -312,6 +312,7 @@ try {
   await page.screenshot({
     path: "/private/tmp/saa10-child-mobile-navigation.png",
     fullPage: true,
+    animations: "disabled",
   });
   await page.keyboard.press("Escape");
   await page.getByRole("dialog").waitFor({ state: "hidden" });

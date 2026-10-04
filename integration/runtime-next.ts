@@ -19,6 +19,8 @@ type Options = {
   publicKey: string;
   children: ChildProcess[];
   command: (body: unknown, key?: string) => Promise<void>;
+  authorize?: (tenantId: string, appId: string) => Promise<void>;
+  retentionMs?: number;
 };
 export async function runtimeNext(o: Options) {
   const specs = [
@@ -138,7 +140,8 @@ export async function runtimeNext(o: Options) {
     });
   }
   for (const dep of [deployments[0], deployments[2]])
-    for (const tenantId of o.tenants)
+    for (const tenantId of o.tenants) {
+      await o.authorize?.(tenantId, dep.appId);
       await o.command({
         kind: "installation",
         tenantId,
@@ -148,32 +151,51 @@ export async function runtimeNext(o: Options) {
         entitled: true,
         validUntil: "2099-01-01T00:00:00Z",
       });
+    }
   const browser = await chromium.launch({
     headless: true,
     executablePath: process.env.PORTAL_CHROMIUM,
   });
   try {
-    const ctx = await browser.newContext();
+    const ctx = await browser.newContext({
+      ignoreHTTPSErrors: o.portal.startsWith("https:"),
+    });
+    const separator = o.cookie.indexOf("=");
     await ctx.addCookies([
       {
-        name: "portal-session",
-        value: o.cookie.slice("portal-session=".length),
+        name: o.cookie.slice(0, separator),
+        value: o.cookie.slice(separator + 1),
         url: o.portal,
+        secure: o.portal.startsWith("https:"),
+        httpOnly: true,
+        sameSite: "Lax",
       },
     ]);
     const page = await ctx.newPage(),
       errors: string[] = [],
+      failures: string[] = [],
       assets = new Set<string>();
     let actions = 0,
       rsc = 0;
     page.on("pageerror", (e) => errors.push(e.message));
     page.on("console", (m) => {
+      if (
+        m.type() === "warning" &&
+        /\/app-assets\/.*\.ttf was preloaded using link preload but not used/.test(
+          m.text(),
+        )
+      )
+        return;
       if (["warning", "error"].includes(m.type())) errors.push(m.text());
     });
     page.on("request", (r) => {
       if (r.method() === "POST" && r.headers()["next-action"]) actions++;
     });
     page.on("response", (r) => {
+      if (r.status() >= 400)
+        failures.push(
+          `${r.status()} ${r.request().method()} ${new URL(r.url()).pathname}${new URL(r.url()).search}`,
+        );
       if (r.url().includes("/app-assets/")) assets.add(r.url());
       if (r.headers()["content-type"]?.includes("text/x-component")) rsc++;
     });
@@ -200,7 +222,20 @@ export async function runtimeNext(o: Options) {
     const oldTab = await ctx.newPage();
     oldTab.on("pageerror", (e) => errors.push(e.message));
     oldTab.on("console", (m) => {
+      if (
+        m.type() === "warning" &&
+        /\/app-assets\/.*\.ttf was preloaded using link preload but not used/.test(
+          m.text(),
+        )
+      )
+        return;
       if (["warning", "error"].includes(m.type())) errors.push(m.text());
+    });
+    oldTab.on("response", (r) => {
+      if (r.status() >= 400)
+        failures.push(
+          `${r.status()} ${r.request().method()} ${new URL(r.url()).pathname}${new URL(r.url()).search}`,
+        );
     });
     await oldTab.goto(base(o.tenants[1]) + "notes");
     await oldTab.getByRole("heading", { name: "租户记录" }).waitFor();
@@ -215,11 +250,18 @@ export async function runtimeNext(o: Options) {
       (u) => u.includes("/demo1/") && u.endsWith(".js"),
     );
     assert.ok(oldAsset);
+    // Drain automatic Link prefetches before testing a successful release.
+    // Admin intentionally rejects a resolution whose deployment changes during lookup.
+    await Promise.all([
+      page.waitForLoadState("networkidle"),
+      oldTab.waitForLoadState("networkidle"),
+    ]);
+    const assetsUntil = Date.now() + (o.retentionMs ?? 60000);
     await o.command({
       kind: "replace-deployment",
       deploymentId: deployments[0].id,
       replacementId: deployments[1].id,
-      assetsUntil: new Date(Date.now() + 60000).toISOString(),
+      assetsUntil: new Date(assetsUntil).toISOString(),
     });
     // The old tab can still use its loaded action and old immutable build assets.
     await oldTab
@@ -235,6 +277,15 @@ export async function runtimeNext(o: Options) {
       [...assets].some((u) => u.includes("/demo2/") && u.endsWith(".js")),
     );
     assert.equal((await ctx.request.get(oldAsset)).status(), 200);
+    if (o.retentionMs !== undefined) {
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.max(0, assetsUntil - Date.now() + 250)),
+      );
+      assert.notEqual((await ctx.request.get(oldAsset)).status(), 200);
+      console.log(
+        "PASS old Next.js resources expire at the configured retention deadline",
+      );
+    }
     await page.screenshot({
       path: "/private/tmp/runtime-registry-next-desktop.png",
       fullPage: true,
@@ -269,7 +320,11 @@ export async function runtimeNext(o: Options) {
       status: "revoked",
     });
     assert.notEqual((await ctx.request.get(oldAsset)).status(), 200);
-    assert.deepEqual(errors, []);
+    assert.deepEqual(
+      errors,
+      [],
+      "Browser errors; response failures: " + failures.join(", "),
+    );
     console.log(
       "PASS real packed-SDK Next.js: SSR, streaming, hydrated RSC and Server Actions, two tenants/apps, live build replacement, old browser tab, retired assets and desktop/mobile",
     );

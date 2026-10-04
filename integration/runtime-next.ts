@@ -173,17 +173,29 @@ export async function runtimeNext(o: Options) {
     ]);
     const page = await ctx.newPage(),
       errors: string[] = [],
+      failures: string[] = [],
       assets = new Set<string>();
     let actions = 0,
       rsc = 0;
     page.on("pageerror", (e) => errors.push(e.message));
     page.on("console", (m) => {
+      if (
+        m.type() === "warning" &&
+        /\/app-assets\/.*\.ttf was preloaded using link preload but not used/.test(
+          m.text(),
+        )
+      )
+        return;
       if (["warning", "error"].includes(m.type())) errors.push(m.text());
     });
     page.on("request", (r) => {
       if (r.method() === "POST" && r.headers()["next-action"]) actions++;
     });
     page.on("response", (r) => {
+      if (r.status() >= 400)
+        failures.push(
+          `${r.status()} ${r.request().method()} ${new URL(r.url()).pathname}${new URL(r.url()).search}`,
+        );
       if (r.url().includes("/app-assets/")) assets.add(r.url());
       if (r.headers()["content-type"]?.includes("text/x-component")) rsc++;
     });
@@ -210,7 +222,20 @@ export async function runtimeNext(o: Options) {
     const oldTab = await ctx.newPage();
     oldTab.on("pageerror", (e) => errors.push(e.message));
     oldTab.on("console", (m) => {
+      if (
+        m.type() === "warning" &&
+        /\/app-assets\/.*\.ttf was preloaded using link preload but not used/.test(
+          m.text(),
+        )
+      )
+        return;
       if (["warning", "error"].includes(m.type())) errors.push(m.text());
+    });
+    oldTab.on("response", (r) => {
+      if (r.status() >= 400)
+        failures.push(
+          `${r.status()} ${r.request().method()} ${new URL(r.url()).pathname}${new URL(r.url()).search}`,
+        );
     });
     await oldTab.goto(base(o.tenants[1]) + "notes");
     await oldTab.getByRole("heading", { name: "租户记录" }).waitFor();
@@ -225,6 +250,12 @@ export async function runtimeNext(o: Options) {
       (u) => u.includes("/demo1/") && u.endsWith(".js"),
     );
     assert.ok(oldAsset);
+    // Drain automatic Link prefetches before testing a successful release.
+    // Admin intentionally rejects a resolution whose deployment changes during lookup.
+    await Promise.all([
+      page.waitForLoadState("networkidle"),
+      oldTab.waitForLoadState("networkidle"),
+    ]);
     const assetsUntil = Date.now() + (o.retentionMs ?? 60000);
     await o.command({
       kind: "replace-deployment",
@@ -289,7 +320,11 @@ export async function runtimeNext(o: Options) {
       status: "revoked",
     });
     assert.notEqual((await ctx.request.get(oldAsset)).status(), 200);
-    assert.deepEqual(errors, []);
+    assert.deepEqual(
+      errors,
+      [],
+      "Browser errors; response failures: " + failures.join(", "),
+    );
     console.log(
       "PASS real packed-SDK Next.js: SSR, streaming, hydrated RSC and Server Actions, two tenants/apps, live build replacement, old browser tab, retired assets and desktop/mobile",
     );

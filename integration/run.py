@@ -13,7 +13,7 @@ if mode in ('auth','worker'):
     if mode=='worker':
         subprocess.run([str(auth/'.venv/bin/saas-auth'),'private-tasks-once'],env=env,check=True);sys.exit(0)
     subprocess.run([str(auth/'.venv/bin/saas-auth'),'migrate'],env=env,check=True)
-    os.execve(str(auth/'.venv/bin/uvicorn'),['uvicorn','saas_auth.api:create_app','--factory','--host','127.0.0.1','--port','59000','--no-access-log'],env)
+    os.execve(str(auth/'.venv/bin/uvicorn'),['uvicorn','saas_auth.api:create_app','--factory','--host','127.0.0.1','--port',env.get('SAAS_AUTH_PORT','59000'),'--no-access-log'],env)
 elif mode=='migrate':
     subprocess.run(['node','scripts/migrate.ts'],cwd=root,env=env,check=True)
 else:

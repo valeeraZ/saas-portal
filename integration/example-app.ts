@@ -156,7 +156,7 @@ const server = createServer(async (req, res) => {
     return send(401, '{"error":"invalid_request"}');
   }
 });
-server.listen(59200, "127.0.0.1", () =>
+server.listen(Number(process.env.EXAMPLE_PORT ?? 59200), "127.0.0.1", () =>
   console.log("Tenant example backend ready"),
 );
 for (const signal of ["SIGTERM", "SIGINT"])

@@ -71,3 +71,38 @@ TTL is zero. A resolution begun after a committed primary-database revocation ca
 - The first independent-build attempt exposed the missing stable Server Action key; the final run included that release requirement and passed. The test's Auth boundary is still a protocol stub; real Keycloak login was not rerun for this increment.
 
 No production deployment or public package publication was performed.
+
+## Real Keycloak regression (2026-10-04, SAA-6)
+
+`npm run test:keycloak-registry` combines the real identity/browser suite with the application proxy suite in **Admin Registry mode**. It uses real Keycloak, Auth, Admin, separate PostgreSQL databases, the built Portal, local SMTP capture and a signed tenant-scoped HTTP example backend. No identity protocol stub or inserted login session replaces the browser login. The session-invariant tests deliberately exercise the real session store separately.
+
+Prepare the isolated identity stack from `integration/README.md`, then prepare/migrate Admin following `saas-admin/integration/README.md`, and run Auth's Python on `integration/prepare-proxy.py`. Before starting Portal, set `PORTAL_REGISTRY_MODE=admin`, remove the three legacy projection variables and set `PORTAL_APP_EGRESS_ORIGINS` to the local example origin (default `http://127.0.0.1:59200`). Retain the generated signing key and Admin credentials. Start the example with `node --env-file=.local/example.env integration/example-app.ts`, along with real Auth, Admin, SMTP capture and Portal. Build Portal before running the regression.
+
+```sh
+export AUTH_SOURCE=/absolute/path/to/saas-auth
+export ADMIN_SOURCE=/absolute/path/to/saas-admin
+# Optional existing executable; otherwise use the matching Playwright browser.
+export PORTAL_CHROMIUM=/absolute/path/to/chromium
+# Optional failure injection ONLY for this suite's disposable Keycloak container.
+export KEYCLOAK_TEST_CONTAINER=saas-saa6-20261004-keycloak-1
+npm run test:keycloak-registry
+```
+
+For isolated failure injection, use a unique Docker Compose project beginning `saas-saa6-` when starting the identity stack. The container name must match `saas-saa6-*-keycloak-1`. The test pauses only that explicitly supplied container and unpauses it in `finally`. Omitting it reports Keycloak outage as **SKIP**, not PASS. Never supply a shared or production Keycloak container. Admin-loss and Auth-unreachable tests start and clean up their own temporary replicas; they do not stop the running services.
+
+If default ports are occupied, the helpers support `SAAS_AUTH_PORT` in `.local/auth.env`, `PORT` in Portal/Admin config, `EXAMPLE_PORT` in `.local/example.env`, `EXAMPLE_ORIGIN` in Portal config, and `PORTAL_TEST_SMTP_PORT` when starting SMTP capture. Keep Auth/Admin URLs, Portal origin, invitation URL, Keycloak redirect/logout URIs, example issuer, Auth SMTP port and Portal egress origin consistent. Update the generated realm before importing it into a fresh disposable Keycloak. All credentials stay in ignored files.
+
+Executed with latest main baselines Auth `537014c`, Admin `926e337`, Portal `48add22` and SDK `64f8924`; Keycloak 26.7.3, PostgreSQL 17, Node 24.10 and real Chromium. Used a fresh Compose project/database volume and ports Portal 58899, Auth 58800, Admin 58801, example 58802, SMTP 58825, PostgreSQL 55434 and Keycloak 59443. Existing processes on the default application ports were left running.
+
+Passed:
+
+- Eight PostgreSQL session tests, real OIDC code/PKCE login with Secure/HttpOnly cookies, real token refresh, CSRF rejection and tokens absent from HTML.
+- Tenant creation and independent selection across tabs; real SMTP invitation, fragment cleanup, member login/acceptance, cross-tenant denial and invalid invitation denial.
+- Logout removes the Portal session and invalidates the former real Auth access token.
+- Real Registry application onboarding after Portal startup, signed backend access, browser writes and isolated data in two tenants; live role revoke and installation disable.
+- Live runtime replacement resolves the new deployment for both tenants without restarting Portal; deployment revocation denies both tenants.
+- Warm Admin replica loss returns 502 (transport failure), Auth unavailability and paused Keycloak return 503; no stale authorized application data is returned. Unpausing Keycloak restores authorization.
+- Proxy query/body/signature/replay checks, redirect/Cookie filtering, streaming, exact 8 MiB body limit and rejection of unsigned upstream access.
+- Desktop/mobile screenshots inspected, no browser page errors or horizontal overflow. Browser plugin was not available; the existing Playwright harness was used.
+
+The initial invitation run hit an occupied SMTP capture port; the final run used its own SMTP port and passed. This increment validates the signed HTTP example with real identity. It does not repeat the optional real Next.js renderer/old-tab build tests above, nor production TLS/DNS, MFA recovery, load tests or the SAA-7 rollout. No production deployment or public package publication occurred.

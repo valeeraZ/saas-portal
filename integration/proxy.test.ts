@@ -3,6 +3,9 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { randomUUID } from "node:crypto";
+import { spawn, type ChildProcess, execFileSync } from "node:child_process";
+import { createServer } from "node:net";
+import { once } from "node:events";
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
 function envFile(path: string) {
@@ -23,7 +26,59 @@ Object.assign(
   envFile(".env.local"),
   envFile(admin + "/.env.local"),
 );
-process.env.ADMIN_ALLOWED_APP_ORIGINS = "http://127.0.0.1:59200";
+const upstreamOrigin = process.env.EXAMPLE_ORIGIN ?? "http://127.0.0.1:59200";
+process.env.ADMIN_ALLOWED_APP_ORIGINS = upstreamOrigin;
+const runtimeRegistry = process.env.PORTAL_REGISTRY_MODE === "admin";
+if (process.env.REQUIRE_RUNTIME_REGISTRY === "true")
+  assert.ok(runtimeRegistry, "Real Registry regression requires Admin mode");
+const children: ChildProcess[] = [];
+async function freePort() {
+  const server = createServer();
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address();
+  assert.ok(address && typeof address !== "string");
+  const port = address.port;
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  return port;
+}
+async function stop(child: ChildProcess) {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  const ended = once(child, "exit");
+  child.kill("SIGTERM");
+  await ended;
+}
+async function replica(
+  cwd: string,
+  script: string,
+  env: Partial<NodeJS.ProcessEnv>,
+) {
+  const child = spawn(process.execPath, [script], {
+    cwd,
+    env: { ...process.env, ...env },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  children.push(child);
+  // Avoid including credentials or tokens from child diagnostics in test errors.
+  child.stderr!.resume();
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(Error("Replica startup timeout")),
+      30000,
+    );
+    child.stdout!.on("data", (chunk) => {
+      if (String(chunk).includes("ready")) {
+        clearTimeout(timer);
+        resolve();
+      }
+    });
+    child.once("exit", () => {
+      clearTimeout(timer);
+      reject(Error("Replica exited"));
+    });
+  });
+  return child;
+}
 const { apply, pool } = await import(pathToFileURL(admin + "/src/db.ts").href);
 const { get, close } = await import("../lib/store.ts");
 const example = envFile(".local/example.env"),
@@ -92,20 +147,29 @@ try {
     active: true,
   };
   const dep = {
-    kind: "deployment",
+    kind: runtimeRegistry ? "runtime-deployment" : "deployment",
     id: randomUUID(),
     appId: app.id,
     digest: "sha256:" + randomUUID().replaceAll("-", "").repeat(2),
-    reviewer: "proxy-test",
-    ready: true,
+    ...(runtimeRegistry
+      ? { targetOrigin: upstreamOrigin, runtime: "http", assetVersion: null }
+      : { reviewer: "proxy-test", ready: true }),
   };
   await command(app);
   await command(dep);
-  await command({
-    kind: "route",
-    deploymentId: dep.id,
-    targetOrigin: "http://127.0.0.1:59200",
-  });
+  if (runtimeRegistry) {
+    await command({
+      kind: "deployment-status",
+      deploymentId: dep.id,
+      status: "ready",
+    });
+  } else {
+    await command({
+      kind: "route",
+      deploymentId: dep.id,
+      targetOrigin: upstreamOrigin,
+    });
+  }
   await assert.rejects(
     command({
       kind: "route",
@@ -123,6 +187,7 @@ try {
     validUntil: "2099-01-01T00:00:00Z",
   };
   const grants: Record<string, string> = {};
+  const roleIds: Record<string, string> = {};
   for (const tenant of [a.id, b.id]) {
     await command({ ...install, tenantId: tenant });
     const role = await auth(
@@ -135,6 +200,7 @@ try {
       roleId: role.id,
     });
     grants[tenant] = grant.id;
+    roleIds[tenant] = role.id;
   }
   const aUrl = origin + `/tenants/${a.id}/apps/reports/`,
     bUrl = origin + `/tenants/${b.id}/apps/reports/`;
@@ -257,9 +323,9 @@ try {
   console.log(
     "PASS native rewrite preserves query/RSC headers, multipart and exact 8 MiB bodies; rejects oversized upload",
   );
-  const direct = await fetch("http://127.0.0.1:59200/reports/api/notes");
+  const direct = await fetch(upstreamOrigin + "/reports/api/notes");
   assert.equal(direct.status, 401);
-  const forged = await fetch("http://127.0.0.1:59200/reports/api/notes", {
+  const forged = await fetch(upstreamOrigin + "/reports/api/notes", {
     headers: { "x-saas-request": "forged" },
   });
   assert.equal(forged.status, 401);
@@ -291,7 +357,7 @@ try {
       .sign(signingKey);
   }
   const signed = await assertion();
-  const directUrl = "http://127.0.0.1:59200/reports/api/notes";
+  const directUrl = upstreamOrigin + "/reports/api/notes";
   assert.equal(
     (await fetch(directUrl, { headers: { "x-saas-request": signed } })).status,
     200,
@@ -346,7 +412,123 @@ try {
   console.log(
     "PASS direct application URL denied immediately after role revoke or installation disable",
   );
+  if (runtimeRegistry) {
+    // Regrant real Auth authorization and re-enable the installation for release checks.
+    await auth(`/v1/tenants/${a.id}/role-assignments`, "POST", {
+      userId: me.user.id,
+      roleId: roleIds[a.id],
+    });
+    await command({ ...install, tenantId: b.id });
+    // Use separate replicas so failure injection never stops an existing service.
+    const adminPort = await freePort();
+    const adminReplica = await replica(admin, "src/server.ts", {
+      PORT: String(adminPort),
+    });
+    const portalPort = await freePort();
+    const portalReplica = await replica(process.cwd(), "server.ts", {
+      PORT: String(portalPort),
+      PORTAL_ADMIN_URL: `http://127.0.0.1:${adminPort}`,
+      PORTAL_TLS_KEY_FILE: ".local/auth-config/.local/tls.key",
+      PORTAL_TLS_CERT_FILE: ".local/auth-config/.local/tls.crt",
+    });
+    const replicaURL = `https://127.0.0.1:${portalPort}/tenants/${a.id}/apps/reports/api/notes`;
+    assert.equal((await ctx.request.get(replicaURL)).status(), 200);
+    await stop(adminReplica);
+    assert.equal((await ctx.request.get(replicaURL)).status(), 502);
+    await stop(portalReplica);
+    const brokenPort = await freePort();
+    const unreachableAuthPort = await freePort();
+    const brokenAdmin = await replica(admin, "src/server.ts", {
+      PORT: String(brokenPort),
+      ADMIN_AUTH_URL: `http://127.0.0.1:${unreachableAuthPort}`,
+    });
+    const brokenPortalPort = await freePort();
+    const brokenPortal = await replica(process.cwd(), "server.ts", {
+      PORT: String(brokenPortalPort),
+      PORTAL_ADMIN_URL: `http://127.0.0.1:${brokenPort}`,
+      PORTAL_TLS_KEY_FILE: ".local/auth-config/.local/tls.key",
+      PORTAL_TLS_CERT_FILE: ".local/auth-config/.local/tls.crt",
+    });
+    assert.equal(
+      (
+        await ctx.request.get(
+          `https://127.0.0.1:${brokenPortalPort}/tenants/${a.id}/apps/reports/api/notes`,
+        )
+      ).status(),
+      503,
+    );
+    await stop(brokenPortal);
+    await stop(brokenAdmin);
+    console.log(
+      "PASS real logged-in session fails closed after warm Admin loss and Auth unavailability",
+    );
+    // Explicit opt-in: only pause the disposable Keycloak container belonging to this test.
+    const keycloak = process.env.KEYCLOAK_TEST_CONTAINER;
+    if (keycloak) {
+      assert.match(keycloak, /^saas-saa6-[a-z0-9-]+-keycloak-1$/);
+      execFileSync("docker", ["pause", keycloak], { stdio: "ignore" });
+      try {
+        assert.equal((await ctx.request.get(aUrl + "api/notes")).status(), 503);
+      } finally {
+        execFileSync("docker", ["unpause", keycloak], { stdio: "ignore" });
+      }
+      assert.equal((await ctx.request.get(aUrl + "api/notes")).status(), 200);
+      console.log(
+        "PASS real Keycloak outage denies access and recovery restores authorization",
+      );
+    } else {
+      console.log(
+        "SKIP Keycloak outage: no disposable KEYCLOAK_TEST_CONTAINER supplied",
+      );
+    }
+    const next = {
+      ...dep,
+      id: randomUUID(),
+      digest: "sha256:" + randomUUID().replaceAll("-", "").repeat(2),
+    };
+    await command(next);
+    await command({
+      kind: "deployment-status",
+      deploymentId: next.id,
+      status: "ready",
+    });
+    await command({
+      kind: "replace-deployment",
+      deploymentId: dep.id,
+      replacementId: next.id,
+      assetsUntil: new Date(Date.now() + 60000).toISOString(),
+    });
+    for (const tenant of [a.id, b.id]) {
+      const response = await ctx.request.get(
+        origin + `/tenants/${tenant}/apps/reports/api/notes`,
+      );
+      assert.equal(response.status(), 200);
+      const route = await fetch(
+        process.env.PORTAL_ADMIN_URL +
+          `/v1/tenants/${tenant}/runtime-route?suffix=/reports`,
+        {
+          headers: {
+            authorization: `Bearer ${s.accessToken}`,
+            "x-portal-key": process.env.PORTAL_ADMIN_KEY!,
+          },
+        },
+      );
+      assert.equal(route.status, 200);
+      assert.equal((await route.json()).deploymentId, next.id);
+    }
+    await command({
+      kind: "deployment-status",
+      deploymentId: next.id,
+      status: "revoked",
+    });
+    for (const url of [aUrl, bUrl])
+      assert.equal((await ctx.request.get(url + "api/notes")).status(), 404);
+    console.log(
+      "PASS real Keycloak authorization with live runtime replacement and deployment revocation",
+    );
+  }
 } finally {
+  for (const child of children.reverse()) await stop(child);
   await browser.close();
   await pool.end();
   await close();

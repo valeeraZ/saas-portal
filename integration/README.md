@@ -51,3 +51,6 @@ Configure `PORTAL_ADMIN_URL` and `PORTAL_ADMIN_KEY` on the Portal server. The ma
 ## Runtime Registry regression
 
 The historical scripts above exercise the explicitly selected `PORTAL_REGISTRY_MODE=environment` baseline. Fresh `prepare.py` config records that choice. To run the new default Admin mode, follow [Runtime Registry validation](../docs/RUNTIME-REGISTRY-VALIDATION.md); it starts independent built Portal/Admin replicas and creates uniquely named disposable databases. Do not combine its configuration with `.env.local` from the historical stack.
+
+
+For SAA-6 real identity coverage in Admin Registry mode, use `npm run test:keycloak-registry` after preparing the real Admin/example stack. See the real-Keycloak section of [Runtime Registry validation](../docs/RUNTIME-REGISTRY-VALIDATION.md) for configuration, isolated failure injection and executed results.

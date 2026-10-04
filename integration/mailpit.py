@@ -1,5 +1,5 @@
 """Loopback-only SMTP capture for real Auth invitation delivery tests."""
-import asyncio, json
+import asyncio, json, os
 from pathlib import Path
 from email import policy
 from email.parser import BytesParser
@@ -12,7 +12,7 @@ class Handler:
         path.write_text(json.dumps({'to':str(msg['To']),'text':msg.get_body(preferencelist=('plain',)).get_content() if msg.is_multipart() else msg.get_content()}))
         path.chmod(0o600)
         return '250 OK'
-controller=Controller(Handler(),hostname='127.0.0.1',port=59025)
+controller=Controller(Handler(),hostname='127.0.0.1',port=int(os.environ.get('PORTAL_TEST_SMTP_PORT','59025')))
 controller.start()
-print('Local SMTP capture ready on 127.0.0.1:59025',flush=True)
+print('Local SMTP capture ready',flush=True)
 asyncio.run(asyncio.Event().wait())

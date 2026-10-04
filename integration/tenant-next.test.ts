@@ -411,10 +411,12 @@ try {
   await tab.evaluate(async () => {
     await document.fonts.ready;
   });
-  await tab.waitForFunction(
-    () =>
-      getComputedStyle(document.querySelector('[data-slot="button"]')!)
-        .height === "32px",
+  assert.equal(
+    await tab
+      .getByRole("link", { name: "\u8bb0\u5f55\u9875\u9762", exact: true })
+      .evaluate((element) => getComputedStyle(element).height),
+    "32px",
+    "Installed shared button styles must apply to the visible application action",
   );
   await page.screenshot({
     path: "/private/tmp/sdk-tenant-next-desktop.png",

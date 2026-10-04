@@ -1,3 +1,9 @@
+import {
+  createSaasPresentation,
+  SAAS_THEME_COOKIE,
+  SAAS_SIDEBAR_COOKIE,
+  SAAS_LOCALE_COOKIE,
+} from "@saas-platform/theme";
 import { registryMode } from "./runtime-registry.ts";
 import { NextResponse, type NextRequest } from "next/server";
 import { readFileSync } from "node:fs";
@@ -90,6 +96,12 @@ export async function forward(
       "RS256",
     );
     const assertion = await new SignJWT({
+      presentation: createSaasPresentation({
+        theme: request.cookies.get(SAAS_THEME_COOKIE)?.value,
+        sidebarCollapsed:
+          request.cookies.get(SAAS_SIDEBAR_COOKIE)?.value === "true",
+        locale: request.cookies.get(SAAS_LOCALE_COOKIE)?.value,
+      }),
       tenantId: route.tenantId,
       roles: route.roles,
       deploymentId: route.deploymentId,

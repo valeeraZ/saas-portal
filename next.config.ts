@@ -1,3 +1,4 @@
+import createNextIntlPlugin from "next-intl/plugin";
 import type { NextConfig } from "next";
 const config: NextConfig = {
   skipTrailingSlashRedirect: true,
@@ -17,4 +18,4 @@ const config: NextConfig = {
     ];
   },
 };
-export default config;
+export default createNextIntlPlugin("./i18n/request.ts")(config);

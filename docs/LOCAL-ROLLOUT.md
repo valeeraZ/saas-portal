@@ -25,7 +25,7 @@ From the Portal checkout:
 
 The runner copies Portal/Admin source and installed dependencies into a private temporary directory. It excludes Git, environment files, existing local configuration and build output. Fresh random credentials, signing/session keys and a short-lived test certificate are generated there. Auth uses the selected checkout and virtualenv with a separate generated configuration/database; the runner does not read the source checkout's credentials.
 
-Every listener uses a dynamically selected loopback port. Docker project `saas-saa7-<random>` and its database volume belong exclusively to this run. Existing application processes, containers, local `.env.local` files and databases are not reused. Port allocation fails visibly if a concurrent process takes a selected port.
+Platform listeners use dynamically selected loopback ports. The shared UI regression additionally requires free loopback ports 59300 and 59301; the runner checks these before starting. Docker project `saas-saa7-<random>` and its database volume belong exclusively to this run. Existing application processes, containers, local `.env.local` files and databases are not reused. Port allocation fails visibly if a concurrent process takes a selected port.
 
 ## Sequence and acceptance
 
@@ -40,9 +40,11 @@ Every listener uses a dynamically selected loopback port. Docker project `saas-s
 9. Confirm Portal's process ID and build ID remain unchanged throughout onboarding and application releases. Exercise an explicit Portal rollback to environment mode for the existing HTTP application, then forward again to Admin mode, without deleting database history or replacing session keys.
 10. Run `npm run test:keycloak-registry` after rollout, including login/refresh/invitation/logout and role/installation/deployment revocation. Test temporary Admin loss, unreachable Auth, and pause/unpause only this run's real Keycloak container.
 
+11. Run the two packed tenant applications through Portal. Verify shared typography/button styling, signed SSR dark theme, English/Chinese switching across documents, keyboard/mobile navigation and tenant-isolated forms.
+
 The rollback exercise demonstrates the existing HTTP projection. A real deployment must prepare complete legacy projections for every application/build it intends to serve after rollback; environment mode is not an automatic outage fallback. Retaining static assets only supports compatible API/Server Action releases; arbitrary breaking changes remain outside this guarantee.
 
-Admin rejects a resolution if its deployment changes while Auth permissions are being checked. An in-flight browser prefetch can therefore receive 403 during replacement; a fresh request resolves the new deployment. The positive browser release test drains automatic Link prefetches before replacement while keeping the old page loaded for its post-release action. It continues to reject unexpected browser HTTP failures and JavaScript errors. Only the scaffold's unused `.ttf` preload warning is excluded from console assertions because the sample overrides that font with system UI fonts.
+Admin rejects a resolution if its deployment changes while Auth permissions are being checked. An in-flight browser prefetch can therefore receive 403 during replacement; a fresh request resolves the new deployment. The positive browser release test drains automatic Link prefetches before replacement while keeping the old page loaded for its post-release action. It continues to reject unexpected browser HTTP failures and JavaScript errors. The shared UI scaffold loads packaged Manrope and JetBrains Mono fonts; the shared UI browser suite checks all warning/error diagnostics.
 
 ## Evidence and cleanup
 

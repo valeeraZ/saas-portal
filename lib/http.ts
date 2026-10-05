@@ -103,7 +103,7 @@ export async function auth<T = unknown>(
       typeof data.code === "string" ? data.code : "auth_rejected",
     );
   }
-  return (r.status === 204 ? null : await readJson(r, 262144)) as T;
+  return (r.status === 204 ? null : await readJson(r, 1048576)) as T;
 }
 export function failure(error: unknown) {
   const status =

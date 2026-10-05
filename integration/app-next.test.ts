@@ -116,6 +116,38 @@ try {
     );
     assert.equal(r.status, 200);
   }
+  async function defineRoles(appId: string) {
+    const r = await fetch(
+      process.env.PORTAL_AUTH_URL + `/v1/operator/apps/${appId}/roles`,
+      {
+        method: "PUT",
+        headers: {
+          "content-type": "application/json",
+          "x-auth-operator-key": local.SAAS_APP_OPERATOR_KEY,
+          "x-auth-operator-actor": "test:browser",
+          "idempotency-key": randomUUID(),
+        },
+        body: JSON.stringify({
+          version: 0,
+          roles: [
+            {
+              key: "viewer",
+              name: "Viewer",
+              description: "Read application data",
+              active: true,
+            },
+            {
+              key: "editor",
+              name: "Editor",
+              description: "Edit application data",
+              active: true,
+            },
+          ],
+        }),
+      },
+    );
+    assert.equal(r.status, 200);
+  }
   const me = await auth("/v1/me");
   const consumer = process.env.SAAS_APP_CONSUMER!;
   assert.ok(consumer, "Set SAAS_APP_CONSUMER from SDK prepare-app-next result");
@@ -201,6 +233,7 @@ try {
       validUntil: "2099-01-01T00:00:00Z",
     });
     const roleGrant = me.user.id;
+    await defineRoles(appId);
     await grant(appId, me.user.id, true);
     apps.push({ ...spec, appId, deploymentId, roleGrant });
   }
@@ -564,7 +597,132 @@ try {
     })
   ).json();
   assert.notEqual(otherMe.user.id, me.user.id);
-  await grant(second.appId, otherMe.user.id, true);
+  // Request access through the user UI; review through a separately verified operator UI.
+  const consoleOrigin = process.env.ACCESS_TEST_CONSOLE_ORIGIN!;
+  assert.ok(
+    consoleOrigin,
+    "Rollout must launch Admin console for access review",
+  );
+  await otherPage.goto(origin + "/more-apps");
+  await otherPage
+    .getByRole("heading", { name: "更多应用", exact: true })
+    .waitFor();
+  const metricsCard = otherPage
+    .locator('[data-slot="card"]')
+    .filter({ has: otherPage.getByText(second.title, { exact: true }) });
+  await metricsCard.getByLabel("Viewer", { exact: true }).check();
+  await metricsCard.getByLabel("Editor", { exact: true }).check();
+  await metricsCard
+    .getByLabel("申请原因（选填）")
+    .fill("Need reporting and editing");
+  await metricsCard
+    .getByRole("button", { name: "申请权限", exact: true })
+    .click();
+  await metricsCard.getByText("等待审批", { exact: true }).waitFor();
+  assert.equal((await other.request.get(bUrl + "api/notes")).status(), 403);
+  await otherPage.screenshot({
+    path: "/private/tmp/saa12-more-apps.png",
+    fullPage: true,
+  });
+  const operator = await browser.newContext({ ignoreHTTPSErrors: true });
+  const adminPage = await operator.newPage();
+  await adminPage.goto(consoleOrigin + "/en/login");
+  await adminPage.getByRole("link", { name: "Sign in with Keycloak" }).click();
+  await adminPage.locator('input[name="username"]').fill("operator");
+  await adminPage
+    .locator('input[name="password"]')
+    .fill(local.SAAS_LOCAL_USER_PASSWORD);
+  await adminPage.locator('button[type="submit"],input[type="submit"]').click();
+  await adminPage.waitForURL(consoleOrigin + "/en/applications");
+  await adminPage.goto(consoleOrigin + "/en/requests");
+  const requestRow = adminPage
+    .getByRole("row")
+    .filter({ hasText: second.title });
+  await requestRow.getByText("editor, viewer", { exact: true }).waitFor();
+  await requestRow
+    .getByRole("button", { name: "Approve access", exact: true })
+    .click();
+  const review = adminPage.getByRole("dialog");
+  await review
+    .getByLabel("Review comment")
+    .fill("Approved for operational reporting");
+  await review.getByRole("button", { name: "Confirm", exact: true }).click();
+  await review.waitFor({ state: "hidden" });
+  await metricsCard
+    .getByText("申请已批准", { exact: true })
+    .waitFor({ timeout: 25000 });
+  await otherPage
+    .locator('[data-sidebar="menu"]')
+    .getByRole("link", { name: second.title, exact: true })
+    .waitFor({ timeout: 25000 });
+  await adminPage.getByRole("combobox", { name: "Status" }).click();
+  await adminPage
+    .getByRole("option", { name: "Approved", exact: true })
+    .click();
+  await adminPage
+    .getByText("Approved for operational reporting", { exact: true })
+    .waitFor();
+  await adminPage
+    .getByText("oidc:" + process.env.ACCESS_TEST_OPERATOR_SUBJECT, {
+      exact: true,
+    })
+    .waitFor();
+  await adminPage.screenshot({
+    path: "/private/tmp/saa12-admin-requests.png",
+    fullPage: true,
+  });
+  // Reject a request for the other application and expose the comment to the requester.
+  const reportsCard = otherPage
+    .locator('[data-slot="card"]')
+    .filter({ has: otherPage.getByText(first.title, { exact: true }) });
+  await reportsCard.getByLabel("Viewer", { exact: true }).check();
+  await reportsCard
+    .getByRole("button", { name: "申请权限", exact: true })
+    .click();
+  await reportsCard.getByText("等待审批", { exact: true }).waitFor();
+  await adminPage.getByRole("combobox", { name: "Status" }).click();
+  await adminPage.getByRole("option", { name: "Pending", exact: true }).click();
+  await adminPage
+    .getByRole("row")
+    .filter({ hasText: first.title })
+    .getByRole("button", { name: "Reject access", exact: true })
+    .click();
+  await adminPage
+    .getByRole("dialog")
+    .getByLabel("Review comment")
+    .fill("Reports access is restricted");
+  await adminPage
+    .getByRole("dialog")
+    .getByRole("button", { name: "Confirm", exact: true })
+    .click();
+  await adminPage.getByRole("dialog").waitFor({ state: "hidden" });
+  await reportsCard
+    .getByText("申请已拒绝", { exact: true })
+    .waitFor({ timeout: 25000 });
+  await reportsCard
+    .getByText("审批意见：Reports access is restricted", { exact: true })
+    .waitFor();
+  assert.equal((await other.request.get(aUrl + "api/notes")).status(), 403);
+  const check = await fetch(
+    process.env.PORTAL_AUTH_URL + `/v1/apps/${second.appId}/permissions`,
+    { headers: { authorization: "Bearer " + otherSession.accessToken } },
+  );
+  assert.deepEqual((await check.json()).roles, ["editor", "viewer"]);
+  await otherPage.setViewportSize({ width: 390, height: 844 });
+  assert.ok(
+    await otherPage.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  );
+  await otherPage.screenshot({
+    path: "/private/tmp/saa12-more-apps-mobile.png",
+    fullPage: true,
+  });
+  await otherPage.setViewportSize({ width: 1440, height: 900 });
+  await operator.close();
+  console.log(
+    "PASS real More apps multi-role request, operator approve/reject with identity/comments, live sidebar update, mobile UI",
+  );
   await otherPage.goto(bUrl + "notes");
   await otherPage.getByRole("heading", { name: "我的记录" }).waitFor();
   assert.equal(

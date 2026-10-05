@@ -26,8 +26,8 @@
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "@saas-platform/theme": "file:vendor/sdk/saas-platform-theme-0.1.1-c5b764956dba.tgz",
-    "@saas-platform/ui": "file:vendor/sdk/saas-platform-ui-0.1.1-55872ab4bc4b.tgz",
-    "@saas-platform/shell": "file:vendor/sdk/saas-platform-shell-0.2.0-439d4edf40a5.tgz",
+    "@saas-platform/ui": "file:vendor/sdk/saas-platform-ui-0.1.2-e0e6246f06b0.tgz",
+    "@saas-platform/shell": "file:vendor/sdk/saas-platform-shell-0.2.1-f213b01a3bbe.tgz",
     "next-intl": "4.14.9"
   },
   "devDependencies": {

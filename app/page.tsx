@@ -25,7 +25,12 @@ export default async function Home() {
             description={me.user.email}
           />
           <section className="flex flex-col gap-4">
-            <h2 className="text-xl font-semibold">{t("applications")}</h2>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-xl font-semibold">{t("applications")}</h2>
+              <Button asChild variant="outline">
+                <a href="/more-apps">{t("moreApps")}</a>
+              </Button>
+            </div>
             <Applications initial={{ items: apps, nextCursor: null }} />
           </section>
           <Controls csrf={s.csrf} />

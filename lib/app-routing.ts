@@ -14,7 +14,7 @@ export class ProxyError extends Error {
   }
 }
 export type Route = {
-  tenantId: string;
+  user: { id: string; displayName: string; email: string };
   userId: string;
   appId: string;
   deploymentId: string;
@@ -24,9 +24,8 @@ export type Route = {
   runtime?: RuntimeMetadata["runtime"];
 };
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
-export function appPath(tenant: string, mount: string, parts: string[] = []) {
-  if (!uuid.test(tenant) || !/^[a-z][a-z0-9-]{0,62}$/.test(mount))
-    throw new ProxyError(400);
+export function appPath(mount: string, parts: string[] = []) {
+  if (!/^[a-z][a-z0-9-]{0,62}$/.test(mount)) throw new ProxyError(400);
   for (const part of parts)
     if (
       !part ||
@@ -36,7 +35,7 @@ export function appPath(tenant: string, mount: string, parts: string[] = []) {
     )
       throw new ProxyError(400);
   return {
-    base: `/tenants/${tenant}/apps/${mount}`,
+    base: `/apps/${mount}`,
     upstream: `/${mount}/` + parts.map(encodeURIComponent).join("/"),
   };
 }
@@ -63,12 +62,8 @@ export function target(value: string) {
     throw new ProxyError(502);
   return u.origin;
 }
-export async function resolveRoute(
-  tenant: string,
-  mount: string,
-  s: Session,
-): Promise<Route> {
-  appPath(tenant, mount);
+export async function resolveRoute(mount: string, s: Session): Promise<Route> {
+  appPath(mount);
   const base = new URL(process.env.PORTAL_ADMIN_URL ?? "");
   if (
     base.pathname !== "/" ||
@@ -87,7 +82,7 @@ export async function resolveRoute(
   const key = process.env.PORTAL_ADMIN_KEY;
   if (!key) throw new ProxyError(503);
   const url = new URL(
-    `/v1/tenants/${tenant}/${registryMode() === "admin" ? "runtime-route" : "route"}`,
+    `/v1/${registryMode() === "admin" ? "runtime-route" : "route"}`,
     base,
   );
   url.searchParams.set("suffix", "/" + mount);
@@ -104,7 +99,10 @@ export async function resolveRoute(
   const v = (await readJson(r, 16384)) as Route;
   if (
     !v ||
-    v.tenantId !== tenant ||
+    !v.user ||
+    v.user.id !== v.userId ||
+    typeof v.user.displayName !== "string" ||
+    typeof v.user.email !== "string" ||
     v.suffix !== "/" + mount ||
     !uuid.test(v.userId) ||
     !uuid.test(v.appId) ||

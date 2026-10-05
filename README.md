@@ -1,3 +1,7 @@
+# Current platform
+
+See [User/application contract](docs/USER-APP-PLATFORM.md). Historical tenant instructions below are superseded.
+
 # saas-portal
 
 客户入口与应用数据入口：导航、租户切换、偏好、会话 BFF、代理。只拥有偏好等 Portal 数据；Auth/Registry/计费事实通过服务 API 获取。

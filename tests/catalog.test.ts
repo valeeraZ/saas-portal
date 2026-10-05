@@ -9,25 +9,22 @@ const item = {
   suffix: "/reports",
   roles: ["viewer"],
 };
-test("catalog rejects tenant mismatch, internal targets and unsafe paths", () => {
+test("catalog rejects legacy tenant fields, internal targets and unsafe paths", () => {
   assert.equal(
-    parseCatalog({ tenantId: tenant, items: [item], nextCursor: null }, tenant)
-      .items.length,
+    parseCatalog({ items: [item], nextCursor: null }).items.length,
     1,
   );
   for (const payload of [
     { tenantId: "wrong", items: [], nextCursor: null },
     {
-      tenantId: tenant,
       items: [{ ...item, frontendTarget: "http://internal" }],
       nextCursor: null,
     },
     {
-      tenantId: tenant,
       items: [{ ...item, suffix: "//evil.test" }],
       nextCursor: null,
     },
-    { tenantId: tenant, items: [item, item], nextCursor: null },
+    { items: [item, item], nextCursor: null },
   ])
-    assert.throws(() => parseCatalog(payload, tenant));
+    assert.throws(() => parseCatalog(payload));
 });

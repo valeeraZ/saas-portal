@@ -5,27 +5,30 @@ import { SaasPageHeader } from "@saas-platform/shell/page-header";
 import { Button } from "@saas-platform/ui/components/button";
 import { Alert, AlertDescription } from "@saas-platform/ui/components/alert";
 import { PortalFrame } from "./frame.tsx";
-import TenantPicker from "./tenant-picker.tsx";
+import Applications from "./applications.tsx";
+import { loadAllApps } from "../lib/catalog.ts";
 import Controls from "./controls.tsx";
 export const dynamic = "force-dynamic";
 export default async function Home() {
   const t = await getTranslations("Portal");
   try {
     const s = await session(),
-      me = await auth<CurrentUser>("/v1/me", s);
+      [me, apps] = await Promise.all([
+        auth<CurrentUser>("/v1/me", s),
+        loadAllApps(s),
+      ]);
     return (
-      <PortalFrame user={me.user}>
+      <PortalFrame user={me.user} apps={apps}>
         <div className="flex flex-col gap-8">
           <SaasPageHeader
             title={t("welcome", { name: me.user.displayName })}
             description={me.user.email}
           />
           <section className="flex flex-col gap-4">
-            <h2 className="text-xl font-semibold">{t("chooseTenant")}</h2>
-            <p className="text-muted-foreground">{t("tenantHint")}</p>
-            <TenantPicker initial={me.tenants} cursor={me.nextTenantsCursor} />
+            <h2 className="text-xl font-semibold">{t("applications")}</h2>
+            <Applications initial={{ items: apps, nextCursor: null }} />
           </section>
-          <Controls csrf={s.csrf} verified={me.user.emailVerified} />
+          <Controls csrf={s.csrf} />
         </div>
       </PortalFrame>
     );

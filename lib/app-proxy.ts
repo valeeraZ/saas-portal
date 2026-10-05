@@ -38,14 +38,10 @@ async function bodyBytes(request: Request) {
 }
 export async function forward(
   request: NextRequest,
-  params: { tenantId: string; mount: string; path?: string[] },
+  params: { mount: string; path?: string[] },
 ) {
   try {
-    const { base, upstream } = appPath(
-      params.tenantId,
-      params.mount,
-      params.path,
-    );
+    const { base, upstream } = appPath(params.mount, params.path);
     if (request.headers.get("upgrade")) throw new ProxyError(501);
     const safe = ["GET", "HEAD"].includes(request.method);
     if (!safe && request.headers.get("origin") !== config().origin)
@@ -53,7 +49,7 @@ export async function forward(
     const length = request.headers.get("content-length");
     if (length && Number(length) > 8 * 1024 * 1024) throw new ProxyError(413);
     const s = await session(request.cookies.get(cookieName())?.value ?? "");
-    const route = await resolveRoute(params.tenantId, params.mount, s);
+    const route = await resolveRoute(params.mount, s);
     const nextApp =
       registryMode() === "admin"
         ? route.runtime === "nextjs"
@@ -102,7 +98,7 @@ export async function forward(
           request.cookies.get(SAAS_SIDEBAR_COOKIE)?.value === "true",
         locale: request.cookies.get(SAAS_LOCALE_COOKIE)?.value,
       }),
-      tenantId: route.tenantId,
+      user: route.user,
       roles: route.roles,
       deploymentId: route.deploymentId,
       method: request.method,

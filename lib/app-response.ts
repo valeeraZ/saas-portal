@@ -6,9 +6,7 @@ import { appPath, redirectLocation, target } from "./app-routing.ts";
 // applies the response boundary before Node commits any upstream headers.
 export function protectAppResponse(req: IncomingMessage, res: ServerResponse) {
   const original = new URL(req.url ?? "/", "http://portal");
-  const match = /^\/tenants\/([^/]+)\/apps\/([^/]+)(?:\/(.*))?$/.exec(
-    original.pathname,
-  );
+  const match = /^\/apps\/([^/]+)(?:\/(.*))?$/.exec(original.pathname);
   const asset = original.pathname.startsWith("/app-assets/");
   if (!match && !asset) return;
   delete req.headers["x-saas-request"];
@@ -43,8 +41,7 @@ export function protectAppResponse(req: IncomingMessage, res: ServerResponse) {
         } else if (match) {
           const { base, upstream } = appPath(
             decodeURIComponent(match[1]),
-            decodeURIComponent(match[2]),
-            match[3] ? match[3].split("/").map(decodeURIComponent) : [],
+            match[2] ? match[2].split("/").map(decodeURIComponent) : [],
           );
           // Proxy overrides Host from the validated deployment target before rewrite.
           // No state is shared between Proxy and the render/server processes.
@@ -71,7 +68,7 @@ export function protectAppResponse(req: IncomingMessage, res: ServerResponse) {
               : (process.env.PORTAL_NEXT_APP_ORIGINS ?? "")
                   .split(",")
                   .includes(origin);
-          const suffix = dynamic ? base : "/" + match[2];
+          const suffix = dynamic ? base : "/" + match[1];
           const upstreamUrl = new URL(
             (dynamic ? original.pathname : upstream) + original.search,
             origin,

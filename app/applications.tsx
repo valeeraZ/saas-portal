@@ -5,10 +5,10 @@ import {
   Card,
   CardHeader,
   CardTitle,
+  CardDescription,
   CardContent,
   CardFooter,
 } from "@saas-platform/ui/components/card";
-import { Badge } from "@saas-platform/ui/components/badge";
 import { Alert, AlertDescription } from "@saas-platform/ui/components/alert";
 import {
   Empty,
@@ -17,17 +17,10 @@ import {
   EmptyDescription,
 } from "@saas-platform/ui/components/empty";
 import { useState } from "react";
-type Tenant = { id: string; name: string; status: string };
-export default function TenantPicker({
-  initial,
-  cursor: initialCursor,
-}: {
-  initial: Tenant[];
-  cursor: string | null;
-}) {
+import type { Catalog } from "../lib/catalog.ts";
+export default function Applications({ initial }: { initial: Catalog }) {
   const t = useTranslations("Portal");
-  const [items, setItems] = useState(initial),
-    [cursor, setCursor] = useState(initialCursor),
+  const [data, setData] = useState(initial),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   async function more() {
@@ -35,19 +28,22 @@ export default function TenantPicker({
     setError("");
     try {
       const r = await fetch(
-        "/api/tenants?cursor=" + encodeURIComponent(cursor!),
+        `/api/navigation?cursor=${encodeURIComponent(data.nextCursor!)}`,
         { cache: "no-store" },
       );
-      const data = await r.json();
-      if (!r.ok) throw new Error("service_unavailable");
-      setItems((previous) => [
-        ...previous,
-        ...data.items.filter(
-          (t: Tenant) => !previous.some((p) => p.id === t.id),
-        ),
-      ]);
-      setCursor(data.nextCursor);
+      if (!r.ok) throw Error("service_unavailable");
+      const next: Catalog = await r.json();
+      setData((previous) => ({
+        ...next,
+        items: [
+          ...previous.items,
+          ...next.items.filter(
+            (item) => !previous.items.some((old) => old.id === item.id),
+          ),
+        ],
+      }));
     } catch (e) {
+      setData((previous) => ({ ...previous, items: [] }));
       setError("service_unavailable");
     } finally {
       setBusy(false);
@@ -56,38 +52,41 @@ export default function TenantPicker({
   return (
     <div className="flex flex-col gap-4">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {items.map((item) => (
+        {data.items.map((item) => (
           <Card key={item.id}>
             <CardHeader>
               <CardTitle>{item.name}</CardTitle>
+              <CardDescription>{item.description}</CardDescription>
             </CardHeader>
             <CardContent>
-              <Badge variant="secondary">{t(item.status)}</Badge>
+              <p className="text-sm text-muted-foreground">
+                {t("appRoles", { roles: item.roles.join(", ") })}
+              </p>
             </CardContent>
             <CardFooter>
-              <Button asChild variant="outline">
-                <a href={`/tenants/${item.id}`}>{t("workspace")}</a>
+              <Button asChild>
+                <a href={`/apps${item.suffix}/`}>{t("openApp")}</a>
               </Button>
             </CardFooter>
           </Card>
         ))}
       </div>
-      {!items.length ? (
+      {!data.items.length && !error ? (
         <Empty>
           <EmptyHeader>
-            <EmptyTitle>{t("noTenants")}</EmptyTitle>
-            <EmptyDescription>{t("noTenantsHint")}</EmptyDescription>
+            <EmptyTitle>{t("noApps")}</EmptyTitle>
+            <EmptyDescription>{t("noAppsHint")}</EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : null}
-      {cursor ? (
-        <Button variant="outline" disabled={busy} onClick={more}>
-          {t(busy ? "saving" : "moreTenants")}
+      {data.nextCursor ? (
+        <Button variant="outline" onClick={more} disabled={busy}>
+          {t(busy ? "saving" : "moreApps")}
         </Button>
       ) : null}
       {error ? (
         <Alert variant="destructive">
-          <AlertDescription>{t("errors.service_unavailable")}</AlertDescription>
+          <AlertDescription>{t("catalogUnavailable")}</AlertDescription>
         </Alert>
       ) : null}
     </div>

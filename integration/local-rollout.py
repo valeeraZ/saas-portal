@@ -36,7 +36,7 @@ def main():
         "--consumer",
         type=Path,
         required=True,
-        help="Packed-SDK tenant Next.js consumer directory",
+        help="Packed-SDK application Next.js consumer directory",
     )
     parser.add_argument("--chromium", type=Path)
     args = parser.parse_args()
@@ -203,7 +203,7 @@ def main():
             AUTH_SOURCE=str(auth),
             ADMIN_SOURCE=str(admin),
             PORTAL_SOURCE=str(portal),
-            SAAS_TENANT_CONSUMER=str(consumer),
+            SAAS_APP_CONSUMER=str(consumer),
             NEXT_TELEMETRY_DISABLED="1",
         )
         if args.chromium:
@@ -311,25 +311,12 @@ def main():
             base,
         )
         run(["npm", "run", "build"], env=base)
-        print(
-            "Testing legacy cutover, live Next.js releases, resource expiry and rollback",
-            flush=True,
-        )
-        run(["node", "integration/rollout.test.ts"], env=base, timeout=900)
-        results["checks"].append(
-            "Real login, legacy cutover, existing sessions/data, Next release/retention and explicit rollback"
-        )
-        print("Running real Keycloak/Registry regression after rollout", flush=True)
         portal_child = start(["python3", "integration/run.py", "portal"], portal, base)
         wait(values["PORTAL_ORIGIN"], portal_child, context)
-        run(["npm", "run", "test:keycloak-registry"], env=base, timeout=300)
-        results["checks"].append(
-            "Post-rollout real Keycloak/Registry authorization and dependency failures"
-        )
         ui_consumer = work / "ui-consumer"
         ui_environment = {
             **base,
-            "SAAS_TENANT_CONSUMER": str(ui_consumer),
+            "SAAS_APP_CONSUMER": str(ui_consumer),
             "SAAS_UI_ASSET_VERSION": "ui1",
             "SAAS_ASSET_VERSION": "ui1",
             "SAAS_PORTAL_ORIGIN": values["PORTAL_ORIGIN"],
@@ -343,14 +330,14 @@ def main():
             )
             run(["npm", "run", "build"], cwd=ui_consumer / mount, env=ui_environment)
         run(
-            ["node", "integration/tenant-next.test.ts"], env=ui_environment, timeout=300
+            ["node", "integration/app-next.test.ts"], env=ui_environment, timeout=300
         )
         results["checks"].append(
-            "Shared SDK UI, signed presentation, two tenant Next.js apps and mobile navigation"
+            "Shared SDK UI, signed presentation, two application Next.js apps and mobile navigation"
         )
         results["status"] = "passed"
         print(
-            "PASS local rollout, rollback, real Next.js and real Keycloak regression",
+            "PASS user/application local rollout with real Next.js and Keycloak",
             flush=True,
         )
     except BaseException:

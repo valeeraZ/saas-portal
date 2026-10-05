@@ -1,6 +1,6 @@
 {
   "source": "https://github.com/valeeraZ/saas-sdk",
-  "revision": "671cbf2df4c4f603e39476d1ee1049966bbb0302",
+  "revision": "d20412ed3b0e1af1e85c5da70ff76bc33de3b0e0",
   "packages": [
     {
       "name": "@saas-platform/theme",
@@ -21,10 +21,10 @@
     {
       "name": "@saas-platform/shell",
       "version": "0.2.1",
-      "filename": "saas-platform-shell-0.2.1-f213b01a3bbe.tgz",
+      "filename": "saas-platform-shell-0.2.1-c4a89ef7d63e.tgz",
       "sourceFilename": "saas-platform-shell-0.2.1.tgz",
-      "integrity": "sha512-AzqZ6nXofA1WZ0oQ7KAjNmNgUxsyJY3TWzyNOdqM12N0V1kaHEeWzGI2r5+ZWoYszZaIQqlJGnBW99o4WwGrVQ==",
-      "sha256": "f213b01a3bbe55cf7ecb4cb4c50d30a124c34d15c19e18c4f1b586432c6acc0b"
+      "integrity": "sha512-yNqzBHU6tRD0BP6GP78SUp/OjK0Ihr+xYDrLj2eY0wZHtxADA5vIv/5mFjOXuXQAWfyOmWNmF8bM85BIuiYP8g==",
+      "sha256": "c4a89ef7d63e141374f5d48f5d79eed62e7f899eaa8eabcc5d0720578290db24"
     }
   ]
 }

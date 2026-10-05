@@ -61,6 +61,7 @@ def main():
     # Shared UI regression uses two stable fixture ports; never reuse a listener.
     for fixture_port in (59300, 59301):
         with socket.socket() as candidate:
+            candidate.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             candidate.bind(("127.0.0.1", fixture_port))
     docker_host = (
         None if os.environ.get("DOCKER_CONTEXT") else os.environ.get("DOCKER_HOST")

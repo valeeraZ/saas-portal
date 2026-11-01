@@ -4,8 +4,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { once } from "node:events";
 import { protectAppResponse } from "../lib/app-response.ts";
-const tenant = "00000000-0000-4000-8000-000000000001";
-const base = `/tenants/${tenant}/apps/reports`;
+const base = `/apps/reports`;
 test("native response entry strips sensitive headers and confines HTTP and action redirects", async () => {
   process.env.PORTAL_ALLOWED_APP_ORIGINS = "https://reports.internal";
   const server = createServer((req, res) => {

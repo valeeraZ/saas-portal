@@ -100,21 +100,25 @@ try {
     assert.ok(r.ok, `Auth failed ${r.status}`);
     return r.status === 204 ? null : r.json();
   }
+  async function grant(appId: string, userId: string, enabled: boolean) {
+    const r = await fetch(
+      process.env.PORTAL_AUTH_URL + `/v1/operator/apps/${appId}/grants`,
+      {
+        method: "PUT",
+        headers: {
+          "content-type": "application/json",
+          "x-auth-operator-key": local.SAAS_APP_OPERATOR_KEY,
+          "x-auth-operator-actor": "test:browser",
+          "idempotency-key": randomUUID(),
+        },
+        body: JSON.stringify({ userId, roles: ["viewer"], enabled }),
+      },
+    );
+    assert.equal(r.status, 200);
+  }
   const me = await auth("/v1/me");
-  const a = await auth("/v1/tenants", "POST", {
-      name: "Next A " + tag,
-      slug: "next-a-" + tag,
-    }),
-    b = await auth("/v1/tenants", "POST", {
-      name: "Next B " + tag,
-      slug: "next-b-" + tag,
-    });
-
-  const consumer = process.env.SAAS_TENANT_CONSUMER!;
-  assert.ok(
-    consumer,
-    "Set SAAS_TENANT_CONSUMER from SDK prepare-tenant-next result",
-  );
+  const consumer = process.env.SAAS_APP_CONSUMER!;
+  assert.ok(consumer, "Set SAAS_APP_CONSUMER from SDK prepare-app-next result");
   const specs = [
     { mount: "next-reports", title: "Next Reports", port: 59300 },
     { mount: "next-metrics", title: "Next Metrics", port: 59301 },
@@ -188,35 +192,22 @@ try {
       ).unref();
     });
     await command({ kind: "deployment-status", deploymentId, status: "ready" });
-    let roleGrant = "";
-    for (const tenant of [a.id, b.id]) {
-      await command({
-        kind: "installation",
-        tenantId: tenant,
-        appId,
-        deploymentId,
-        enabled: true,
-        entitled: true,
-        validUntil: "2099-01-01T00:00:00Z",
-      });
-      const role = await auth(
-        `/v1/tenants/${tenant}/apps/${appId}/roles`,
-        "POST",
-        { key: "viewer", description: "Use Next app" },
-      );
-      const grant = await auth(
-        `/v1/tenants/${tenant}/role-assignments`,
-        "POST",
-        { userId: me.user.id, roleId: role.id },
-      );
-      if (tenant === a.id) roleGrant = grant.id;
-    }
+    await command({
+      kind: "publication",
+      appId,
+      deploymentId,
+      enabled: true,
+      entitled: true,
+      validUntil: "2099-01-01T00:00:00Z",
+    });
+    const roleGrant = me.user.id;
+    await grant(appId, me.user.id, true);
     apps.push({ ...spec, appId, deploymentId, roleGrant });
   }
   const first = apps[0],
     second = apps[1];
-  const aUrl = origin + `/tenants/${a.id}/apps/${first.mount}/`,
-    bUrl = origin + `/tenants/${b.id}/apps/${first.mount}/`;
+  const aUrl = origin + `/apps/${first.mount}/`,
+    bUrl = origin + `/apps/${second.mount}/`;
   let actions = 0;
   page.on("request", (request) => {
     if (request.method() === "POST" && request.headers()["next-action"])
@@ -230,8 +221,8 @@ try {
     if (type.includes("text/x-component")) protocols.push(response.url());
     if (response.url().includes("/app-assets/")) assets.push(response.url());
   });
-  await page.goto(origin + `/tenants/${a.id}`);
-  await page.getByRole("heading", { name: a.name, exact: true }).waitFor();
+  await page.goto(origin);
+  await page.getByRole("heading", { name: /欢迎/ }).waitFor();
   await page.evaluate(() => document.fonts.ready);
   const portalStyle = await page
     .locator('[data-slot="button"][data-variant="outline"]')
@@ -251,7 +242,7 @@ try {
     "Shared theme radius must be applied",
   );
   await page.screenshot({
-    path: "/private/tmp/saa10-portal-desktop.png",
+    path: "/private/tmp/saa11-portal-desktop.png",
     fullPage: true,
   });
   const entryResponse = page.waitForResponse(
@@ -267,6 +258,11 @@ try {
   await page.waitForURL(aUrl);
   assert.equal(entry?.status(), 200);
   await page.getByRole("heading", { name: first.title, exact: true }).waitFor();
+  for (const app of apps)
+    await page
+      .locator('[data-sidebar="menu"]')
+      .getByRole("link", { name: app.title, exact: true })
+      .waitFor();
   assert.equal(await page.title(), first.title);
   await page
     .getByRole("main")
@@ -322,7 +318,7 @@ try {
     .getByText("Streamed content loaded", { exact: true })
     .waitFor();
   await page.screenshot({
-    path: "/private/tmp/saa10-child-dark-en.png",
+    path: "/private/tmp/saa11-child-dark-en.png",
     fullPage: true,
   });
   await page.setViewportSize({ width: 390, height: 844 });
@@ -330,8 +326,13 @@ try {
     .getByRole("button", { name: "Toggle Sidebar", exact: true })
     .click();
   await page.getByRole("dialog").waitFor();
+  for (const app of apps)
+    await page
+      .getByRole("dialog")
+      .getByRole("link", { name: app.title, exact: true })
+      .waitFor();
   await page.screenshot({
-    path: "/private/tmp/saa10-child-mobile-navigation.png",
+    path: "/private/tmp/saa11-child-mobile-navigation.png",
     fullPage: true,
     animations: "disabled",
   });
@@ -361,13 +362,13 @@ try {
   await page.getByRole("link", { name: "\u8bb0\u5f55\u9875\u9762" }).click();
   await page.waitForURL(aUrl + "notes");
   await page.getByRole("button", { name: "检查 SDK fetch" }).click();
-  await page.getByText("API 租户：" + a.id, { exact: true }).waitFor();
+  await page.getByText("API 用户：" + me.user.id, { exact: true }).waitFor();
   await page.getByRole("textbox", { name: "记录内容" }).fill("Next-A-" + tag);
   await page.getByRole("button", { name: "保存 Server Action" }).click();
   await page.getByText("Next-A-" + tag, { exact: true }).waitFor();
   await page.waitForURL(aUrl + "notes?saved=1");
   await page.getByRole("button", { name: "检查 SDK fetch" }).click();
-  await page.getByText("API 租户：" + a.id, { exact: true }).waitFor();
+  await page.getByText("API 用户：" + me.user.id, { exact: true }).waitFor();
   const tab = await ctx.newPage();
   tab.on("pageerror", () => errors++);
   tab.on("console", (message) => {
@@ -375,7 +376,7 @@ try {
       appErrors.push(message.type() + ": " + message.text().slice(0, 180));
   });
   await tab.goto(bUrl + "notes");
-  await tab.getByRole("heading", { name: "租户记录" }).waitFor();
+  await tab.getByRole("heading", { name: "我的记录" }).waitFor();
   assert.equal(
     await tab.getByText("Next-A-" + tag, { exact: true }).count(),
     0,
@@ -409,7 +410,7 @@ try {
     assets.some((url) => /\.(woff2?|ttf|otf)$/.test(url)),
     "Local font must load through isolated namespace",
   );
-  const secondUrl = origin + `/tenants/${a.id}/apps/${second.mount}/`;
+  const secondUrl = bUrl;
   const nextAssets: string[] = [];
   const styleDiagnostics: unknown[] = [];
 
@@ -430,6 +431,11 @@ try {
       nextAssets.push(response.url());
   });
   await tab.goto(secondUrl);
+  for (const app of apps)
+    await tab
+      .locator('[data-sidebar="menu"]')
+      .getByRole("link", { name: app.title, exact: true })
+      .waitFor();
   await tab.bringToFront();
   await tab.getByRole("heading", { name: second.title, exact: true }).waitFor();
   await tab
@@ -502,12 +508,12 @@ try {
       );
     });
   await page.screenshot({
-    path: "/private/tmp/sdk-tenant-next-desktop.png",
+    path: "/private/tmp/sdk-app-next-desktop.png",
     fullPage: true,
   });
   await tab.setViewportSize({ width: 390, height: 844 });
   await tab.screenshot({
-    path: "/private/tmp/sdk-tenant-next-mobile.png",
+    path: "/private/tmp/sdk-app-next-mobile.png",
     fullPage: true,
   });
   assert.ok(
@@ -521,10 +527,60 @@ try {
     "PASS shared Portal/child typography and components, signed SSR dark theme, bilingual navigation and mobile sidebar",
   );
   console.log(
-    "PASS two isolated packed-SDK Next apps: SSR, streaming, JS/CSS/fonts/public/image optimization, RSC navigation, Server Action redirects and tenant-scoped fetch",
+    "PASS two isolated packed-SDK Next apps: SSR, streaming, JS/CSS/fonts/public/image optimization, RSC navigation, Server Action redirects and user-scoped fetch",
   );
   console.log(
-    "PASS same-build two-tenant Server Action persistence, direct deep links/reload, history navigation, desktop/mobile and zero browser diagnostics",
+    "PASS same-build two-application Server Action persistence, direct deep links/reload, history navigation, desktop/mobile and zero browser diagnostics",
+  );
+  // A second real account sees no applications until explicitly granted.
+  const other = await browser.newContext({ ignoreHTTPSErrors: true });
+  const otherPage = await other.newPage();
+  await otherPage.goto(origin);
+  await otherPage
+    .getByRole("link", { name: "登录 / 注册", exact: true })
+    .click();
+  await otherPage.locator('input[name="username"]').fill("local-member");
+  await otherPage
+    .locator('input[name="password"]')
+    .fill(local.SAAS_LOCAL_USER_PASSWORD);
+  await otherPage.locator('button[type="submit"],input[type="submit"]').click();
+  await otherPage.waitForURL(origin + "/");
+  assert.equal(
+    (await other.request.get(origin + "/api/navigation")).status(),
+    200,
+  );
+  assert.deepEqual(
+    (await (await other.request.get(origin + "/api/navigation")).json()).items,
+    [],
+  );
+  assert.equal((await other.request.get(aUrl + "api/notes")).status(), 403);
+  const otherCookie = (await other.cookies()).find(
+    (c) => c.name === "__Host-portal-session",
+  )!;
+  const otherSession = (await get(otherCookie.value))!;
+  const otherMe = await (
+    await fetch(process.env.PORTAL_AUTH_URL + "/v1/me", {
+      headers: { authorization: "Bearer " + otherSession.accessToken },
+    })
+  ).json();
+  assert.notEqual(otherMe.user.id, me.user.id);
+  await grant(second.appId, otherMe.user.id, true);
+  await otherPage.goto(bUrl + "notes");
+  await otherPage.getByRole("heading", { name: "我的记录" }).waitFor();
+  assert.equal(
+    await otherPage.getByText("Next-B-" + tag, { exact: true }).count(),
+    0,
+  );
+  const otherNavigation = (
+    await (await other.request.get(origin + "/api/navigation")).json()
+  ).items;
+  assert.deepEqual(
+    otherNavigation.map((app: { id: string }) => app.id),
+    [second.appId],
+  );
+  await other.close();
+  console.log(
+    "PASS two real users with independent app grants, complete navigation and application-owned private notes",
   );
   const anon = await browser.newContext({ ignoreHTTPSErrors: true });
   assert.equal((await anon.request.get(aUrl + "api/notes")).status(), 401);
@@ -553,31 +609,33 @@ try {
   );
   await anon.close();
   assert.equal(
-    (
-      await fetch(
-        "http://127.0.0.1:59300/tenants/" +
-          a.id +
-          "/apps/" +
-          first.mount +
-          "/api/notes",
-      )
-    ).status,
+    (await fetch("http://127.0.0.1:59300/apps/" + first.mount + "/api/notes"))
+      .status,
     401,
   );
   const spoofed = await ctx.request.get(aUrl + "api/notes", {
     headers: {
       authorization: "Bearer forged",
       "x-saas-request": "forged",
-      "x-tenant-id": b.id,
+      "x-tenant-id": randomUUID(),
     },
   });
   assert.equal(spoofed.status(), 200);
-  assert.equal((await spoofed.json()).tenantId, a.id);
-  await auth(
-    `/v1/tenants/${a.id}/role-assignments/${first.roleGrant}`,
-    "DELETE",
-    undefined,
-    '\"1\"',
+  assert.equal((await spoofed.json()).userId, me.user.id);
+  await grant(first.appId, me.user.id, false);
+  await page.goto(bUrl);
+  await page
+    .getByRole("heading", { name: second.title, exact: true })
+    .waitFor();
+  await page
+    .locator('[data-sidebar="menu"]')
+    .getByRole("link", { name: second.title, exact: true })
+    .waitFor();
+  await page.waitForFunction(
+    () =>
+      !document.querySelector(
+        '[data-sidebar="menu"] a[href="/apps/next-reports/"]',
+      ),
   );
   assert.equal((await ctx.request.get(aUrl + "api/notes")).status(), 403);
   assert.equal((await ctx.request.get(bUrl + "api/notes")).status(), 200);

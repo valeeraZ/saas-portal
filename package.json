@@ -1,7 +1,7 @@
 {
   "name": "saas-portal",
   "version": "0.1.0",
-  "description": "客户入口与应用数据入口：导航、租户切换、偏好、会话 BFF、代理。只拥有偏好等 Portal 数据；Auth/Registry/计费事实通过服务 API 获取。",
+  "description": "用户入口：应用导航、偏好、会话 BFF 和应用代理。平台只负责用户身份与应用访问权限。",
   "scripts": {
     "dev": "node server.ts --dev",
     "build": "next build",
@@ -10,7 +10,7 @@
     "test": "node --test tests/*.test.ts",
     "db:migrate": "node scripts/migrate.ts",
     "session:prune": "node scripts/prune.ts",
-    "test:integration": "bash integration/test.sh",
+    "test:integration": "bash integration/keycloak-registry.sh",
     "format:check": "prettier --check app lib scripts tests integration/*.ts next.config.ts proxy.ts server.ts i18n messages postcss.config.mjs",
     "test:runtime-registry": "node integration/runtime-registry.test.ts",
     "test:keycloak-registry": "bash integration/keycloak-registry.sh"
@@ -27,7 +27,7 @@
     "react-dom": "19.2.0",
     "@saas-platform/theme": "file:vendor/sdk/saas-platform-theme-0.1.1-c5b764956dba.tgz",
     "@saas-platform/ui": "file:vendor/sdk/saas-platform-ui-0.1.1-55872ab4bc4b.tgz",
-    "@saas-platform/shell": "file:vendor/sdk/saas-platform-shell-0.1.1-2fb402f15bc4.tgz",
+    "@saas-platform/shell": "file:vendor/sdk/saas-platform-shell-0.2.0-439d4edf40a5.tgz",
     "next-intl": "4.14.9"
   },
   "devDependencies": {

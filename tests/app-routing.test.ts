@@ -2,16 +2,11 @@ process.env.PORTAL_REGISTRY_MODE = "environment";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { appPath, target, redirectLocation } from "../lib/app-routing.ts";
-const tenant = "00000000-0000-4000-8000-000000000001";
-test("tenant paths reject decoded traversal, encoded separators and invalid mounts", () => {
+test("application paths reject decoded traversal, encoded separators and invalid mounts", () => {
   for (const part of ["..", ".", "%2e%2e", "x/y", "x\\y", "x\n"])
-    assert.throws(() => appPath(tenant, "reports", [part]));
-  assert.throws(() => appPath("bad", "reports"));
-  assert.throws(() => appPath(tenant, "../auth"));
-  assert.equal(
-    appPath(tenant, "reports", ["a b.js"]).upstream,
-    "/reports/a%20b.js",
-  );
+    assert.throws(() => appPath("reports", [part]));
+  assert.throws(() => appPath("../auth"));
+  assert.equal(appPath("reports", ["a b.js"]).upstream, "/reports/a%20b.js");
 });
 test("proxy origins must be explicitly allowed and plain origins", () => {
   process.env.PORTAL_ALLOWED_APP_ORIGINS = "https://reports.internal";
@@ -25,9 +20,9 @@ test("proxy origins must be explicitly allowed and plain origins", () => {
   ])
     assert.throws(() => target(value));
 });
-test("redirects preserve tenant mount and reject external or sibling locations", () => {
+test("redirects preserve application mount and reject external or sibling locations", () => {
   const upstream = new URL("https://reports.internal/reports/form");
-  const base = `/tenants/${tenant}/apps/reports`;
+  const base = `/apps/reports`;
   assert.equal(
     redirectLocation("/reports/next?x=1", upstream, base, "/reports"),
     base + "/next?x=1",

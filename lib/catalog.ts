@@ -8,7 +8,6 @@ export type CatalogItem = {
   roles: string[];
 };
 export type Catalog = {
-  tenantId: string;
   items: CatalogItem[];
   nextCursor: string | null;
 };
@@ -16,10 +15,10 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function record(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
-export function parseCatalog(value: unknown, tenant: string): Catalog {
+export function parseCatalog(value: unknown): Catalog {
   if (
     !record(value) ||
-    value.tenantId !== tenant ||
+    Object.keys(value).some((k) => !["items", "nextCursor"].includes(k)) ||
     !Array.isArray(value.items) ||
     value.items.length > 50 ||
     (value.nextCursor !== null &&
@@ -62,12 +61,10 @@ export function parseCatalog(value: unknown, tenant: string): Catalog {
   return value as Catalog;
 }
 export async function loadCatalog(
-  tenant: string,
   s: Session,
   cursor?: string,
 ): Promise<Catalog> {
-  if (!uuid.test(tenant) || (cursor && !uuid.test(cursor)))
-    throw Error("Invalid tenant cursor");
+  if (cursor && !uuid.test(cursor)) throw Error("Invalid catalog cursor");
   const base = new URL(process.env.PORTAL_ADMIN_URL ?? "");
   if (
     base.pathname !== "/" ||
@@ -85,7 +82,7 @@ export async function loadCatalog(
     throw Error("Invalid Admin origin");
   const key = process.env.PORTAL_ADMIN_KEY;
   if (!key) throw Error("Missing Admin credential");
-  const url = new URL(`/v1/tenants/${tenant}/catalog`, base);
+  const url = new URL("/v1/catalog", base);
   if (cursor) url.searchParams.set("cursor", cursor);
   const r = await fetch(url, {
     headers: {
@@ -98,5 +95,21 @@ export async function loadCatalog(
     signal: AbortSignal.timeout(15000),
   });
   if (!r.ok) throw Error("Catalog unavailable");
-  return parseCatalog(await readJson(r, 262144), tenant);
+  return parseCatalog(await readJson(r, 262144));
+}
+
+export async function loadAllApps(s: Session) {
+  const items = new Map<string, CatalogItem>(),
+    seen = new Set<string>();
+  let cursor: string | undefined;
+  do {
+    const page = await loadCatalog(s, cursor);
+    for (const app of page.items) items.set(app.id, app);
+    cursor = page.nextCursor ?? undefined;
+    if (cursor) {
+      if (seen.has(cursor)) throw Error("Invalid catalog cursor cycle");
+      seen.add(cursor);
+    }
+  } while (cursor);
+  return [...items.values()];
 }

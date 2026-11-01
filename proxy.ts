@@ -27,15 +27,12 @@ export async function proxy(request: NextRequest) {
       );
     }
   }
-  const match = /^\/tenants\/([^/]+)\/apps\/([^/]+)(?:\/(.*))?$/.exec(
-    request.nextUrl.pathname,
-  );
+  const match = /^\/apps\/([^/]+)(?:\/(.*))?$/.exec(request.nextUrl.pathname);
   if (!match) return NextResponse.next();
   try {
     return await forward(request, {
-      tenantId: decodeURIComponent(match[1]),
-      mount: decodeURIComponent(match[2]),
-      path: match[3] ? match[3].split("/").map(decodeURIComponent) : [],
+      mount: decodeURIComponent(match[1]),
+      path: match[2] ? match[2].split("/").map(decodeURIComponent) : [],
     });
   } catch {
     return NextResponse.json(
@@ -49,5 +46,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/tenants/:tenantId/apps/:path*", "/app-assets/:path*"],
+  matcher: ["/apps/:path*", "/app-assets/:path*"],
 };

@@ -1,6 +1,6 @@
 import { registryMode, runtimeAsset } from "./runtime-registry.ts";
 import { target, ProxyError } from "./app-routing.ts";
-// Only immutable, public build artifacts have a tenant-independent namespace.
+// Only immutable, public build artifacts have a application-independent namespace.
 export async function publicAppAsset(url: URL) {
   const match =
     /^\/app-assets\/([a-z][a-z0-9-]{0,62})\/([a-zA-Z0-9-]{1,80})(\/_next\/static\/[a-zA-Z0-9_./-]+)$/.exec(

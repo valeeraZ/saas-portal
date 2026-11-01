@@ -51,7 +51,11 @@ export async function session(sessionId?: string): Promise<Session> {
   }
   return value;
 }
-export async function mutation(request: Request, refresh = true) {
+export async function mutation(
+  request: Request,
+  refresh = true,
+  bodyLimit = 4096,
+) {
   assertOrigin(request, config().origin);
   const id = (await cookies()).get(cookieName())?.value;
   const s = refresh ? await session() : id ? await get(id) : null;
@@ -59,7 +63,7 @@ export async function mutation(request: Request, refresh = true) {
   if (request.headers.get("x-csrf-token") !== s.csrf) throw new Error("csrf");
   if (!request.headers.get("content-type")?.startsWith("application/json"))
     throw new Error("bad_request");
-  const body = await readJson(request);
+  const body = await readJson(request, bodyLimit);
   if (typeof body !== "object" || body === null || Array.isArray(body))
     throw new Error("bad_request");
   return { s, body: body as Record<string, unknown> };
@@ -99,7 +103,7 @@ export async function auth<T = unknown>(
       typeof data.code === "string" ? data.code : "auth_rejected",
     );
   }
-  return (r.status === 204 ? null : await readJson(r, 262144)) as T;
+  return (r.status === 204 ? null : await readJson(r, 1048576)) as T;
 }
 export function failure(error: unknown) {
   const status =

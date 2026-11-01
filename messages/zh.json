@@ -10,7 +10,7 @@
     "signIn": "登录 / 注册",
     "identityUnavailable": "暂时无法连接身份服务",
     "retryHint": "请稍后刷新重试。",
-    "moreApps": "加载更多应用",
+    "moreApps": "更多应用",
     "applications": "应用",
     "appsHint": "打开你已获授权的应用。",
     "appRoles": "你的角色：{roles}",
@@ -31,6 +31,30 @@
       "csrf": "页面会话已变化，请刷新后重试。",
       "bad_request": "请求无效，请刷新后重试。",
       "fallback": "操作未完成，请稍后重试。"
+    },
+    "moreAppsDescription": "浏览全部可用应用，申请你需要的角色权限。",
+    "moreAppsEmpty": "暂无已发布的应用。",
+    "hasAccess": "已获授权",
+    "selectRoles": "应用角色",
+    "selectRolesHint": "可多选要申请的角色。已有角色显示为选中且不可重复申请。",
+    "requestReason": "申请原因（选填）",
+    "requestAccess": "申请权限",
+    "submitting": "提交中…",
+    "noRoles": "暂无可申请的角色，请联系管理员。",
+    "reviewComment": "审批意见：{comment}",
+    "retry": "重试",
+    "requestStatuses": {
+      "pending": "等待审批",
+      "approved": "申请已批准",
+      "rejected": "申请已拒绝"
+    },
+    "accessErrors": {
+      "accessUnavailable": "暂时无法获取权限信息，请重试。",
+      "pending_request": "你已有该应用的待审批申请。",
+      "invalid_roles": "角色已发生变更，请刷新后选择当前可用角色。",
+      "already_authorized": "你已拥有这些角色。",
+      "csrf": "请刷新页面后重试。",
+      "unauthorized": "会话已过期，请重新登录。"
     }
   }
 }

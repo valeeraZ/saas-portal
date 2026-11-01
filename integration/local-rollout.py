@@ -1,6 +1,8 @@
 """Run an isolated local deployment drill. Invoke with the Auth virtualenv Python."""
 
 import argparse
+import base64
+from uuid import uuid4
 import json
 import os
 import secrets
@@ -59,6 +61,7 @@ def main():
     # Shared UI regression uses two stable fixture ports; never reuse a listener.
     for fixture_port in (59300, 59301):
         with socket.socket() as candidate:
+            candidate.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             candidate.bind(("127.0.0.1", fixture_port))
     docker_host = (
         None if os.environ.get("DOCKER_CONTEXT") else os.environ.get("DOCKER_HOST")
@@ -89,10 +92,13 @@ def main():
 
     ports = dict(
         zip(
-            ["database", "keycloak", "auth", "admin", "portal", "example", "smtp"],
-            [port() for _ in range(7)],
+            ["database", "keycloak", "auth", "admin", "portal", "example", "smtp", "console"],
+            [port() for _ in range(8)],
         )
     )
+    console_origin=f"http://127.0.0.1:{ports['console']}"
+    console_secret=secrets.token_urlsafe(32)
+    operator_subject=str(uuid4())
     replacements = {
         "55434": ports["database"],
         "59443": ports["keycloak"],
@@ -212,6 +218,9 @@ def main():
         realm = portal / ".local/auth-config/.local/saas-local-realm.json"
         realm.write_text(urls(realm.read_text()))
         data = json.loads(realm.read_text())
+        credentials=read_env(portal/'.local/auth-config/.env')
+        data['users'].append({'id':operator_subject,'username':'operator','enabled':True,'email':'operator@example.com','emailVerified':True,'firstName':'Local','lastName':'Operator','credentials':[{'type':'password','value':credentials['SAAS_LOCAL_USER_PASSWORD'],'temporary':False}]})
+        data['clients'].append({'clientId':'saas-admin-console','enabled':True,'protocol':'openid-connect','publicClient':False,'secret':console_secret,'standardFlowEnabled':True,'directAccessGrantsEnabled':False,'serviceAccountsEnabled':False,'fullScopeAllowed':False,'redirectUris':[console_origin+'/api/auth/callback'],'attributes':{'pkce.code.challenge.method':'S256','post.logout.redirect.uris':console_origin+'/en/login##'+console_origin+'/zh/login'},'defaultClientScopes':['basic','profile','email'],'protocolMappers':[{'name':'console-audience','protocol':'openid-connect','protocolMapper':'oidc-audience-mapper','config':{'included.client.audience':'saas-admin-console','access.token.claim':'true','id.token.claim':'false','introspection.token.claim':'true'}}]})
         data["smtpServer"]["port"] = str(ports["smtp"])
         realm.write_text(json.dumps(data, indent=2) + "\n")
         for path in [portal / ".env.local", portal / ".local/auth.env"]:
@@ -310,6 +319,13 @@ def main():
             portal,
             base,
         )
+        console_env={**base,**read_env(admin/'.env.local'),'ADMIN_ENABLE_OPERATOR':'true','ADMIN_UI_ALLOW_LOCAL_HTTP':'true','ADMIN_UI_ORIGIN':console_origin,'ADMIN_UI_OIDC_ISSUER':f"https://127.0.0.1:{ports['keycloak']}/realms/saas-local",'ADMIN_UI_OIDC_CLIENT_ID':'saas-admin-console','ADMIN_UI_OIDC_CLIENT_SECRET':console_secret,'ADMIN_UI_ALLOWED_SUBJECTS':operator_subject,'ADMIN_UI_SESSION_KEY':base64.b64encode(secrets.token_bytes(32)).decode()}
+        run(['npm','run','build'],cwd=admin/'web',env=console_env)
+        console_child=start(['npm','run','start','--','--port',str(ports['console'])],admin/'web',console_env)
+        wait(console_origin+'/en/login',console_child)
+        base['ACCESS_TEST_CONSOLE_ORIGIN']=console_origin
+        base['ACCESS_TEST_OPERATOR_SUBJECT']=operator_subject
+        base['ACCESS_TEST_CONSOLE_SESSION_KEY']=console_env['ADMIN_UI_SESSION_KEY']
         run(["npm", "run", "build"], env=base)
         portal_child = start(["python3", "integration/run.py", "portal"], portal, base)
         wait(values["PORTAL_ORIGIN"], portal_child, context)

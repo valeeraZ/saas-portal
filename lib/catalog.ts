@@ -60,10 +60,12 @@ export function parseCatalog(value: unknown): Catalog {
   }
   return value as Catalog;
 }
-export async function loadCatalog(
+export async function loadCatalog<T = Catalog>(
   s: Session,
   cursor?: string,
-): Promise<Catalog> {
+  resource: "catalog" | "discovery" = "catalog",
+  parse: (value: unknown) => T = parseCatalog as (value: unknown) => T,
+): Promise<T> {
   if (cursor && !uuid.test(cursor)) throw Error("Invalid catalog cursor");
   const base = new URL(process.env.PORTAL_ADMIN_URL ?? "");
   if (
@@ -82,7 +84,7 @@ export async function loadCatalog(
     throw Error("Invalid Admin origin");
   const key = process.env.PORTAL_ADMIN_KEY;
   if (!key) throw Error("Missing Admin credential");
-  const url = new URL("/v1/catalog", base);
+  const url = new URL("/v1/" + resource, base);
   if (cursor) url.searchParams.set("cursor", cursor);
   const r = await fetch(url, {
     headers: {
@@ -95,7 +97,7 @@ export async function loadCatalog(
     signal: AbortSignal.timeout(15000),
   });
   if (!r.ok) throw Error("Catalog unavailable");
-  return parseCatalog(await readJson(r, 262144));
+  return parse(await readJson(r, 262144));
 }
 
 export async function loadAllApps(s: Session) {

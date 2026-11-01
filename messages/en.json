@@ -10,7 +10,7 @@
     "signIn": "Sign in / Register",
     "identityUnavailable": "Identity service unavailable",
     "retryHint": "Refresh and try again later.",
-    "moreApps": "Load more applications",
+    "moreApps": "More apps",
     "applications": "Applications",
     "appsHint": "Open applications you can access.",
     "appRoles": "Your roles: {roles}",
@@ -31,6 +31,30 @@
       "csrf": "Your page session changed. Refresh and try again.",
       "bad_request": "Invalid request. Refresh and try again.",
       "fallback": "The operation failed. Try again later."
+    },
+    "moreAppsDescription": "Discover all available applications and request the roles you need.",
+    "moreAppsEmpty": "No applications have been published yet.",
+    "hasAccess": "Access granted",
+    "selectRoles": "Application roles",
+    "selectRolesHint": "Select one or more roles to request. Roles you already have are selected and disabled.",
+    "requestReason": "Reason (optional)",
+    "requestAccess": "Request access",
+    "submitting": "Submitting…",
+    "noRoles": "No roles are available for requests. Contact an administrator.",
+    "reviewComment": "Review comment: {comment}",
+    "retry": "Retry",
+    "requestStatuses": {
+      "pending": "Pending approval",
+      "approved": "Request approved",
+      "rejected": "Request rejected"
+    },
+    "accessErrors": {
+      "accessUnavailable": "Access information is unavailable. Please retry.",
+      "pending_request": "You already have a pending request for this application.",
+      "invalid_roles": "The roles have changed. Refresh and select currently available roles.",
+      "already_authorized": "You already have these roles.",
+      "csrf": "Refresh the page and try again.",
+      "unauthorized": "Your session has expired. Please sign in again."
     }
   }
 }

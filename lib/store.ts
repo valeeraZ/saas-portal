@@ -5,6 +5,8 @@ import { random, digest } from "./security.ts";
 const pool = new Pool({
   connectionString: process.env.PORTAL_DATABASE_URL,
   max: 10,
+  connectionTimeoutMillis: 3000,
+  statement_timeout: 5000,
 });
 function key() {
   const k = Buffer.from(process.env.PORTAL_SESSION_KEY ?? "", "base64");
@@ -68,6 +70,10 @@ export async function migrate() {
 }
 export async function close() {
   await pool.end();
+}
+
+export async function ready() {
+  await pool.query("SELECT 1 FROM portal_sessions LIMIT 1");
 }
 
 export async function refreshed(

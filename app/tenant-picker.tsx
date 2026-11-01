@@ -1,4 +1,21 @@
 "use client";
+import { useTranslations } from "next-intl";
+import { Button } from "@saas-platform/ui/components/button";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  CardFooter,
+} from "@saas-platform/ui/components/card";
+import { Badge } from "@saas-platform/ui/components/badge";
+import { Alert, AlertDescription } from "@saas-platform/ui/components/alert";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyDescription,
+} from "@saas-platform/ui/components/empty";
 import { useState } from "react";
 type Tenant = { id: string; name: string; status: string };
 export default function TenantPicker({
@@ -8,6 +25,7 @@ export default function TenantPicker({
   initial: Tenant[];
   cursor: string | null;
 }) {
+  const t = useTranslations("Portal");
   const [items, setItems] = useState(initial),
     [cursor, setCursor] = useState(initialCursor),
     [busy, setBusy] = useState(false),
@@ -21,7 +39,7 @@ export default function TenantPicker({
         { cache: "no-store" },
       );
       const data = await r.json();
-      if (!r.ok) throw new Error("暂时无法加载租户，请重试。");
+      if (!r.ok) throw new Error("service_unavailable");
       setItems((previous) => [
         ...previous,
         ...data.items.filter(
@@ -30,27 +48,48 @@ export default function TenantPicker({
       ]);
       setCursor(data.nextCursor);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "加载失败");
+      setError("service_unavailable");
     } finally {
       setBusy(false);
     }
   }
   return (
-    <>
-      <div className="grid">
-        {items.map((t) => (
-          <a className="card" href={`/tenants/${t.id}`} key={t.id}>
-            <strong>{t.name}</strong>
-            <small>{t.status === "active" ? "可用" : "已暂停"}</small>
-          </a>
+    <div className="flex flex-col gap-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {items.map((item) => (
+          <Card key={item.id}>
+            <CardHeader>
+              <CardTitle>{item.name}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Badge variant="secondary">{t(item.status)}</Badge>
+            </CardContent>
+            <CardFooter>
+              <Button asChild variant="outline">
+                <a href={`/tenants/${item.id}`}>{t("workspace")}</a>
+              </Button>
+            </CardFooter>
+          </Card>
         ))}
       </div>
-      {cursor ? (
-        <button className="secondary" disabled={busy} onClick={more}>
-          加载更多租户
-        </button>
+      {!items.length ? (
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>{t("noTenants")}</EmptyTitle>
+            <EmptyDescription>{t("noTenantsHint")}</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : null}
-      <p role="alert">{error}</p>
-    </>
+      {cursor ? (
+        <Button variant="outline" disabled={busy} onClick={more}>
+          {t(busy ? "saving" : "moreTenants")}
+        </Button>
+      ) : null}
+      {error ? (
+        <Alert variant="destructive">
+          <AlertDescription>{t("errors.service_unavailable")}</AlertDescription>
+        </Alert>
+      ) : null}
+    </div>
   );
 }

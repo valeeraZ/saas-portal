@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { join } from "node:path";
 import { importPKCS8, SignJWT } from "jose";
-import { createHash } from "node:crypto";
+import { createHash, X509Certificate } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { randomUUID } from "node:crypto";
@@ -33,9 +33,25 @@ const { get, close } = await import("../lib/store.ts");
 const example = envFile(".local/example.env"),
   local = envFile(".local/auth-config/.env");
 const origin = process.env.PORTAL_ORIGIN!;
+const assetVersion = process.env.SAAS_UI_ASSET_VERSION ?? "demo1";
 const tag = randomUUID().slice(0, 8);
+// Trust only this disposable fixture's public key in this browser process.
+// Context-level TLS overrides can still cause parallel asset retries in Chromium.
+const fixtureSpki = createHash("sha256")
+  .update(
+    new X509Certificate(
+      readFileSync(process.env.NODE_EXTRA_CA_CERTS!),
+    ).publicKey.export({ type: "spki", format: "der" }),
+  )
+  .digest("base64");
 const browser = await chromium.launch({
   headless: true,
+  args: [
+    "--ignore-certificate-errors-spki-list=" + fixtureSpki,
+    ...(process.env.PORTAL_NET_LOG
+      ? ["--log-net-log=" + process.env.PORTAL_NET_LOG]
+      : []),
+  ],
   executablePath: process.env.PORTAL_CHROMIUM,
 });
 const ctx = await browser.newContext({ ignoreHTTPSErrors: true });
@@ -126,47 +142,24 @@ try {
       active: true,
     });
     await command({
-      kind: "deployment",
+      kind: "runtime-deployment",
       id: deploymentId,
       appId,
-      digest: "sha256:" + randomUUID().replaceAll("-", "").repeat(2),
-      reviewer: "next-sdk-test",
-      ready: true,
-    });
-    await command({
-      kind: "route",
-      deploymentId,
       targetOrigin: "http://127.0.0.1:" + spec.port,
+      runtime: "nextjs",
+      assetVersion,
+      digest:
+        "sha256:" +
+        createHash("sha256")
+          .update(readFileSync(join(consumer, spec.mount, ".next/BUILD_ID")))
+          .digest("hex"),
     });
-    let roleGrant = "";
-    for (const tenant of [a.id, b.id]) {
-      await command({
-        kind: "installation",
-        tenantId: tenant,
-        appId,
-        deploymentId,
-        enabled: true,
-        entitled: true,
-        validUntil: "2099-01-01T00:00:00Z",
-      });
-      const role = await auth(
-        `/v1/tenants/${tenant}/apps/${appId}/roles`,
-        "POST",
-        { key: "viewer", description: "Use Next app" },
-      );
-      const grant = await auth(
-        `/v1/tenants/${tenant}/role-assignments`,
-        "POST",
-        { userId: me.user.id, roleId: role.id },
-      );
-      if (tenant === a.id) roleGrant = grant.id;
-    }
     const child = spawn(process.execPath, ["server.mjs"], {
       cwd: join(consumer, spec.mount),
       env: {
         ...process.env,
         PORT: String(spec.port),
-        SAAS_ASSET_VERSION: "demo1",
+        SAAS_ASSET_VERSION: assetVersion,
         SAAS_PORTAL_ORIGIN: origin,
         SAAS_APP_ID: appId,
         SAAS_DEPLOYMENT_ID: deploymentId,
@@ -194,6 +187,30 @@ try {
         20000,
       ).unref();
     });
+    await command({ kind: "deployment-status", deploymentId, status: "ready" });
+    let roleGrant = "";
+    for (const tenant of [a.id, b.id]) {
+      await command({
+        kind: "installation",
+        tenantId: tenant,
+        appId,
+        deploymentId,
+        enabled: true,
+        entitled: true,
+        validUntil: "2099-01-01T00:00:00Z",
+      });
+      const role = await auth(
+        `/v1/tenants/${tenant}/apps/${appId}/roles`,
+        "POST",
+        { key: "viewer", description: "Use Next app" },
+      );
+      const grant = await auth(
+        `/v1/tenants/${tenant}/role-assignments`,
+        "POST",
+        { userId: me.user.id, roleId: role.id },
+      );
+      if (tenant === a.id) roleGrant = grant.id;
+    }
     apps.push({ ...spec, appId, deploymentId, roleGrant });
   }
   const first = apps[0],
@@ -213,11 +230,48 @@ try {
     if (type.includes("text/x-component")) protocols.push(response.url());
     if (response.url().includes("/app-assets/")) assets.push(response.url());
   });
-  const entry = await page.goto(aUrl);
+  await page.goto(origin + `/tenants/${a.id}`);
+  await page.getByRole("heading", { name: a.name, exact: true }).waitFor();
+  await page.evaluate(() => document.fonts.ready);
+  const portalStyle = await page
+    .locator('[data-slot="button"][data-variant="outline"]')
+    .first()
+    .evaluate((el) => {
+      const css = getComputedStyle(el);
+      return {
+        font: css.fontFamily,
+        height: css.height,
+        radius: css.borderRadius,
+      };
+    });
+  assert.match(portalStyle.font, /Manrope/);
+  assert.equal(portalStyle.height, "32px");
+  assert.ok(
+    parseFloat(portalStyle.radius) > 0,
+    "Shared theme radius must be applied",
+  );
+  await page.screenshot({
+    path: "/private/tmp/saa10-portal-desktop.png",
+    fullPage: true,
+  });
+  const entryResponse = page.waitForResponse(
+    (response) =>
+      response.url() === aUrl && response.request().isNavigationRequest(),
+  );
+  await page
+    .locator('[data-slot="card"]')
+    .filter({ hasText: first.title })
+    .getByRole("link", { name: "\u6253\u5f00\u5e94\u7528", exact: true })
+    .click();
+  const entry = await entryResponse;
+  await page.waitForURL(aUrl);
   assert.equal(entry?.status(), 200);
   await page.getByRole("heading", { name: first.title, exact: true }).waitFor();
   assert.equal(await page.title(), first.title);
-  await page.getByText("流式内容已加载", { exact: true }).waitFor();
+  await page
+    .getByRole("main")
+    .getByText("流式内容已加载", { exact: true })
+    .waitFor();
   await page.waitForFunction(() =>
     [...document.images].every(
       (image) => image.complete && image.naturalWidth > 0,
@@ -226,7 +280,85 @@ try {
   await page.evaluate(async () => {
     await document.fonts.ready;
   });
-  await page.getByRole("link", { name: "记录页面" }).click();
+  const childStyle = await page
+    .locator('[data-slot="button"][data-variant="outline"]')
+    .first()
+    .evaluate((el) => {
+      const css = getComputedStyle(el);
+      return {
+        font: css.fontFamily,
+        height: css.height,
+        radius: css.borderRadius,
+      };
+    });
+  assert.deepEqual(
+    childStyle,
+    portalStyle,
+    "Packed SDK CSS must match Portal UI",
+  );
+  assert.equal(
+    await page.getByRole("main").count(),
+    1,
+    "Child must render one shared Shell",
+  );
+  await page
+    .getByRole("button", {
+      name: "\u4f7f\u7528\u6df1\u8272\u4e3b\u9898",
+      exact: true,
+    })
+    .click();
+  await page.waitForFunction(
+    () =>
+      document.documentElement.dataset.theme === "dark" &&
+      document.cookie.includes("saas-theme=dark"),
+  );
+  const dark = await ctx.request.get(aUrl);
+  assert.match(await dark.text(), /<html[^>]*data-theme="dark"/);
+  await page.getByRole("button", { name: "\u8bed\u8a00", exact: true }).click();
+  await page.getByRole("menuitem", { name: "English", exact: true }).click();
+  await page.waitForFunction(() => document.documentElement.lang === "en");
+  await page
+    .getByRole("main")
+    .getByText("Streamed content loaded", { exact: true })
+    .waitFor();
+  await page.screenshot({
+    path: "/private/tmp/saa10-child-dark-en.png",
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page
+    .getByRole("button", { name: "Toggle Sidebar", exact: true })
+    .click();
+  await page.getByRole("dialog").waitFor();
+  await page.screenshot({
+    path: "/private/tmp/saa10-child-mobile-navigation.png",
+    fullPage: true,
+    animations: "disabled",
+  });
+  await page.keyboard.press("Escape");
+  await page.getByRole("dialog").waitFor({ state: "hidden" });
+  assert.equal(await page.getByRole("dialog").count(), 0);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(origin);
+  await page.waitForFunction(
+    () =>
+      document.documentElement.lang === "en" &&
+      document.documentElement.dataset.theme === "dark",
+  );
+  await page.getByRole("heading", { name: /Welcome/ }).waitFor();
+  await page
+    .getByRole("button", { name: "Use light theme", exact: true })
+    .click();
+  await page.waitForFunction(() =>
+    document.cookie.includes("saas-theme=light"),
+  );
+  await page.getByRole("button", { name: "Language", exact: true }).click();
+  await page
+    .getByRole("menuitem", { name: "\u4e2d\u6587", exact: true })
+    .click();
+  await page.waitForFunction(() => document.documentElement.lang === "zh");
+  await page.goto(aUrl);
+  await page.getByRole("link", { name: "\u8bb0\u5f55\u9875\u9762" }).click();
   await page.waitForURL(aUrl + "notes");
   await page.getByRole("button", { name: "检查 SDK fetch" }).click();
   await page.getByText("API 租户：" + a.id, { exact: true }).waitFor();
@@ -279,29 +411,96 @@ try {
   );
   const secondUrl = origin + `/tenants/${a.id}/apps/${second.mount}/`;
   const nextAssets: string[] = [];
+  const styleDiagnostics: unknown[] = [];
 
-  tab.on("response", (response) => {
+  tab.on("response", async (response) => {
+    if (response.url().endsWith(".css")) {
+      try {
+        const bytes = await response.body();
+        styleDiagnostics.push({
+          url: response.url(),
+          status: response.status(),
+          length: bytes.length,
+          utility: bytes.toString().includes(".inline-flex"),
+          headers: response.headers(),
+        });
+      } catch {}
+    }
     if (response.url().includes("/app-assets/"))
       nextAssets.push(response.url());
   });
   await tab.goto(secondUrl);
+  await tab.bringToFront();
   await tab.getByRole("heading", { name: second.title, exact: true }).waitFor();
-  await tab.getByText("流式内容已加载", { exact: true }).waitFor();
+  await tab
+    .getByRole("main")
+    .getByText("流式内容已加载", { exact: true })
+    .waitFor();
   await tab.waitForFunction(() =>
     [...document.images].every(
       (image) => image.complete && image.naturalWidth > 0,
     ),
   );
   assert.ok(
-    nextAssets.some((url) => url.includes("/" + second.mount + "/demo1/")),
+    nextAssets.some((url) =>
+      url.includes("/" + second.mount + "/" + assetVersion + "/"),
+    ),
   );
   await tab.evaluate(async () => {
     await document.fonts.ready;
   });
-  await tab.waitForFunction(
-    () =>
-      getComputedStyle(document.querySelector("main")!).borderRadius === "12px",
-  );
+  await tab
+    .waitForFunction(
+      () => {
+        const action = [
+          ...document.querySelectorAll(
+            'main a[data-slot="button"][data-variant="default"]',
+          ),
+        ].find((element) => (element as HTMLElement).checkVisibility());
+        return action && getComputedStyle(action).height === "32px";
+      },
+      null,
+      { timeout: 10000 },
+    )
+    .catch(async (error) => {
+      const diagnostic = await tab
+        .getByRole("main")
+        .getByRole("link", { name: "\u8bb0\u5f55\u9875\u9762", exact: true })
+        .evaluate((element) => ({
+          html: element.outerHTML,
+          height: getComputedStyle(element).height,
+          display: getComputedStyle(element).display,
+          styles: [...document.querySelectorAll('link[rel="stylesheet"]')].map(
+            (link) => ({
+              href: (link as HTMLLinkElement).href,
+              loaded: !!(link as HTMLLinkElement).sheet,
+              disabled: (link as HTMLLinkElement).sheet?.disabled,
+              media: (link as HTMLLinkElement).media,
+              rules: (() => {
+                try {
+                  return (link as HTMLLinkElement).sheet?.cssRules.length;
+                } catch {
+                  return "unreadable";
+                }
+              })(),
+              sheetHref: (link as HTMLLinkElement).sheet?.href,
+              crossOrigin: (link as HTMLLinkElement).crossOrigin,
+            }),
+          ),
+        }));
+      throw new Error(
+        "Shared action style: " +
+          JSON.stringify({
+            diagnostic,
+            appErrors,
+            url: tab.url(),
+            styleDiagnostics,
+          }),
+        {
+          cause: error,
+        },
+      );
+    });
   await page.screenshot({
     path: "/private/tmp/sdk-tenant-next-desktop.png",
     fullPage: true,
@@ -319,6 +518,9 @@ try {
   assert.equal(errors, 0);
   assert.deepEqual(appErrors, []);
   console.log(
+    "PASS shared Portal/child typography and components, signed SSR dark theme, bilingual navigation and mobile sidebar",
+  );
+  console.log(
     "PASS two isolated packed-SDK Next apps: SSR, streaming, JS/CSS/fonts/public/image optimization, RSC navigation, Server Action redirects and tenant-scoped fetch",
   );
   console.log(
@@ -335,7 +537,12 @@ try {
   assert.equal(
     (
       await anon.request.get(
-        origin + "/app-assets/" + first.mount + "/demo1/api/notes",
+        origin +
+          "/app-assets/" +
+          first.mount +
+          "/" +
+          assetVersion +
+          "/api/notes",
       )
     ).status(),
     404,

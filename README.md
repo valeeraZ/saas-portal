@@ -23,7 +23,9 @@ npm run typecheck
 npm run build
 ```
 
-生产配置通过环境注入；`.env.example` 不包含可用凭据。所有在线写入都由 Auth 校验权限和持久化租户事实。Admin 导航、代理及旧偏好/SDK 的抽取尚未完成，PORTAL-02 继续开放。
+Portal 与子应用现在通过 SDK 共享 shadcn、Tailwind CSS、主题和导航框架，支持中文/英文切换。安装、打包更新与展示偏好边界见 [共享 UI 说明](docs/SHARED-UI.md)。
+
+生产配置通过环境注入；`.env.example` 不包含可用凭据。所有在线写入都由 Auth 校验权限和持久化租户事实。Admin UI 保持独立；当前展示偏好仅在本地浏览器保存。
 
 ## Next.js 16 原生 Proxy
 

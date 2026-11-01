@@ -194,7 +194,7 @@ try {
   await mp.waitForURL(origin + "/invitations/accept");
   await mp.getByRole("button", { name: "接受邀请" }).click();
   await mp.waitForURL(origin + "/tenants/" + a);
-  await mp.getByText("当前角色：member").waitFor();
+  await mp.getByText("当前角色：成员").waitFor();
   console.log(
     "PASS real SMTP invitation -> fragment cleanup -> login -> accept",
   );

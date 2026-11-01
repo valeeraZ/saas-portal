@@ -1,5 +1,9 @@
 "use client";
-import { message } from "../../../lib/messages.ts";
+import { errorKey } from "../../../lib/messages.ts";
+import { useTranslations } from "next-intl";
+import { Button } from "@saas-platform/ui/components/button";
+import { Alert, AlertDescription } from "@saas-platform/ui/components/alert";
+import { SaasPageHeader } from "@saas-platform/shell/page-header";
 import { useEffect, useRef, useState } from "react";
 export default function Invite({
   csrf,
@@ -10,6 +14,7 @@ export default function Invite({
   email?: string;
   verified?: boolean;
 }) {
+  const t = useTranslations("Portal");
   const token = useRef(""),
     key = useRef<string | null>(null);
   const [ready, setReady] = useState(false),
@@ -52,42 +57,54 @@ export default function Invite({
         body: JSON.stringify({ token: token.current }),
       });
       const body = await r.json();
-      if (!r.ok) throw new Error(message(body.error));
+      if (!r.ok) throw new Error(errorKey(body.error));
       token.current = "";
       sessionStorage.removeItem("portal-invite");
       location.assign(`/tenants/${body.tenantId}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "接受失败");
+      setError(
+        e instanceof Error ? errorKey(e.message) : "service_unavailable",
+      );
       setBusy(false);
     }
   }
   return (
-    <>
-      <h1>加入团队</h1>
-      <p>使用邀请邮件对应的已验证邮箱接受邀请。</p>
+    <div className="flex max-w-2xl flex-col gap-6">
+      <SaasPageHeader title={t("joinTeam")} description={t("invitationHint")} />
       {ready && !token.current ? (
-        <p>邀请令牌缺失或已过期，请重新打开邮件链接。</p>
+        <Alert>
+          <AlertDescription>{t("missingInvitation")}</AlertDescription>
+        </Alert>
       ) : csrf ? (
         <>
-          <p>当前账户：{email}</p>
-          {!verified ? <p>请先验证邮箱后刷新页面。</p> : null}
-          <button
+          <p>{t("currentAccount", { email: email ?? "" })}</p>
+          {!verified ? (
+            <Alert>
+              <AlertDescription>{t("verifyInvitationEmail")}</AlertDescription>
+            </Alert>
+          ) : null}
+          <Button
             disabled={!ready || !token.current || busy || !verified}
             onClick={accept}
           >
-            接受邀请
-          </button>
+            {t(busy ? "saving" : "acceptInvitation")}
+          </Button>
         </>
       ) : (
-        <a
-          className="button"
-          href="/api/auth/login?returnTo=%2Finvitations%2Faccept"
-        >
-          登录后接受邀请
-        </a>
+        <Button asChild>
+          <a href="/api/auth/login?returnTo=%2Finvitations%2Faccept">
+            {t("signInInvitation")}
+          </a>
+        </Button>
       )}
-      <p role="alert">{error}</p>
-      <a href="/">返回 Portal</a>
-    </>
+      {error ? (
+        <Alert variant="destructive">
+          <AlertDescription>{t(`errors.${errorKey(error)}`)}</AlertDescription>
+        </Alert>
+      ) : null}
+      <Button asChild variant="outline">
+        <a href="/">{t("backToPortal")}</a>
+      </Button>
+    </div>
   );
 }

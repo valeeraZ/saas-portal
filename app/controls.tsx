@@ -1,5 +1,21 @@
 "use client";
-import { message } from "../lib/messages.ts";
+import { errorKey } from "../lib/messages.ts";
+import { useTranslations } from "next-intl";
+import { Button } from "@saas-platform/ui/components/button";
+import { Input } from "@saas-platform/ui/components/input";
+import {
+  Field,
+  FieldGroup,
+  FieldLabel,
+} from "@saas-platform/ui/components/field";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@saas-platform/ui/components/card";
+import { Alert, AlertDescription } from "@saas-platform/ui/components/alert";
 import { useState, useRef } from "react";
 export default function Controls({
   csrf,
@@ -8,6 +24,7 @@ export default function Controls({
   csrf: string;
   verified: boolean;
 }) {
+  const t = useTranslations("Portal");
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   const key = useRef<string | null>(null);
@@ -34,11 +51,13 @@ export default function Controls({
       const body = await r.json();
       if (!r.ok) {
         if (r.status < 500) key.current = null;
-        throw new Error(message(body.error));
+        throw new Error(errorKey(body.error));
       }
       location.assign(`/tenants/${body.id}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "请求失败");
+      setError(
+        e instanceof Error ? errorKey(e.message) : "service_unavailable",
+      );
     } finally {
       setBusy(false);
     }
@@ -53,40 +72,59 @@ export default function Controls({
         body: "{}",
       });
       const body = await r.json();
-      if (!r.ok) throw new Error(message(body.error));
+      if (!r.ok) throw new Error(errorKey(body.error));
       location.assign(body.location);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "退出失败");
+      setError(
+        e instanceof Error ? errorKey(e.message) : "service_unavailable",
+      );
       setBusy(false);
     }
   }
   return (
-    <>
-      <section>
-        <h2>创建租户</h2>
-        {!verified ? <p>请先在身份服务验证邮箱，再创建租户。</p> : null}
-        <form onSubmit={create}>
-          <label>
-            租户名称
-            <input name="name" required maxLength={200} />
-          </label>
-          <label>
-            地址标识
-            <input
-              name="slug"
-              required
-              maxLength={63}
-              pattern="[a-z0-9]+(-[a-z0-9]+)*"
-              placeholder="my-team"
-            />
-          </label>
-          <button disabled={busy || !verified}>创建工作空间</button>
-        </form>
-      </section>
-      <p role="alert">{error}</p>
-      <button className="secondary" disabled={busy} onClick={logout}>
-        退出会话
-      </button>
-    </>
+    <div className="flex max-w-2xl flex-col gap-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("createTenant")}</CardTitle>
+          {!verified ? (
+            <CardDescription>{t("verifyEmail")}</CardDescription>
+          ) : null}
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={create}>
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="tenant-name">{t("tenantName")}</FieldLabel>
+                <Input id="tenant-name" name="name" required maxLength={200} />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="tenant-slug">{t("slug")}</FieldLabel>
+                <Input
+                  id="tenant-slug"
+                  name="slug"
+                  required
+                  maxLength={63}
+                  pattern="[a-z0-9]+(-[a-z0-9]+)*"
+                  placeholder={t("slugExample")}
+                />
+              </Field>
+              <Field>
+                <Button disabled={busy || !verified}>
+                  {t(busy ? "saving" : "createWorkspace")}
+                </Button>
+              </Field>
+            </FieldGroup>
+          </form>
+        </CardContent>
+      </Card>
+      {error ? (
+        <Alert variant="destructive">
+          <AlertDescription>{t(`errors.${errorKey(error)}`)}</AlertDescription>
+        </Alert>
+      ) : null}
+      <Button variant="outline" disabled={busy} onClick={logout}>
+        {t("signOut")}
+      </Button>
+    </div>
   );
 }

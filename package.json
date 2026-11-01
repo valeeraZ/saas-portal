@@ -11,7 +11,7 @@
     "db:migrate": "node scripts/migrate.ts",
     "session:prune": "node scripts/prune.ts",
     "test:integration": "bash integration/test.sh",
-    "format:check": "prettier --check app lib scripts tests integration/*.ts next.config.ts proxy.ts server.ts",
+    "format:check": "prettier --check app lib scripts tests integration/*.ts next.config.ts proxy.ts server.ts i18n messages postcss.config.mjs",
     "test:runtime-registry": "node integration/runtime-registry.test.ts",
     "test:keycloak-registry": "bash integration/keycloak-registry.sh"
   },
@@ -20,11 +20,15 @@
   "private": true,
   "dependencies": {
     "jose": "6.2.2",
-    "next": "16.3.5",
+    "next": "16.3.8",
     "openid-client": "6.8.8",
     "pg": "8.23.0",
     "react": "19.2.0",
-    "react-dom": "19.2.0"
+    "react-dom": "19.2.0",
+    "@saas-platform/theme": "file:vendor/sdk/saas-platform-theme-0.1.1-c5b764956dba.tgz",
+    "@saas-platform/ui": "file:vendor/sdk/saas-platform-ui-0.1.1-55872ab4bc4b.tgz",
+    "@saas-platform/shell": "file:vendor/sdk/saas-platform-shell-0.1.1-2fb402f15bc4.tgz",
+    "next-intl": "4.14.9"
   },
   "devDependencies": {
     "@types/node": "24.10.1",
@@ -33,7 +37,9 @@
     "@types/react-dom": "19.3.0",
     "playwright": "1.63.0",
     "prettier": "3.9.6",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "@tailwindcss/postcss": "4.3.3",
+    "tailwindcss": "4.3.3"
   },
   "engines": {
     "node": ">=24.10.0"

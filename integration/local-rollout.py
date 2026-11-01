@@ -56,6 +56,10 @@ def main():
     ]:
         if not path.exists():
             raise SystemExit(f"Missing prerequisite: {path}")
+    # Shared UI regression uses two stable fixture ports; never reuse a listener.
+    for fixture_port in (59300, 59301):
+        with socket.socket() as candidate:
+            candidate.bind(("127.0.0.1", fixture_port))
     docker_host = (
         None if os.environ.get("DOCKER_CONTEXT") else os.environ.get("DOCKER_HOST")
     )
@@ -273,7 +277,7 @@ def main():
             PORTAL_REGISTRY_MODE="admin",
             PORT=str(ports["portal"]),
             EXAMPLE_ORIGIN=f"http://127.0.0.1:{ports['example']}",
-            PORTAL_APP_EGRESS_ORIGINS=f"http://127.0.0.1:{ports['example']}",
+            PORTAL_APP_EGRESS_ORIGINS=f"http://127.0.0.1:{ports['example']},http://127.0.0.1:59300,http://127.0.0.1:59301",
         )
         save_env(portal / ".env.local", values)
         print("Migrating Admin before publishing API and Portal", flush=True)
@@ -321,6 +325,28 @@ def main():
         run(["npm", "run", "test:keycloak-registry"], env=base, timeout=300)
         results["checks"].append(
             "Post-rollout real Keycloak/Registry authorization and dependency failures"
+        )
+        ui_consumer = work / "ui-consumer"
+        ui_environment = {
+            **base,
+            "SAAS_TENANT_CONSUMER": str(ui_consumer),
+            "SAAS_UI_ASSET_VERSION": "ui1",
+            "SAAS_ASSET_VERSION": "ui1",
+            "SAAS_PORTAL_ORIGIN": values["PORTAL_ORIGIN"],
+        }
+        for mount in ("next-reports", "next-metrics"):
+            shutil.copytree(
+                consumer / mount,
+                ui_consumer / mount,
+                symlinks=True,
+                ignore=shutil.ignore_patterns(".next", "*.tsbuildinfo"),
+            )
+            run(["npm", "run", "build"], cwd=ui_consumer / mount, env=ui_environment)
+        run(
+            ["node", "integration/tenant-next.test.ts"], env=ui_environment, timeout=300
+        )
+        results["checks"].append(
+            "Shared SDK UI, signed presentation, two tenant Next.js apps and mobile navigation"
         )
         results["status"] = "passed"
         print(
